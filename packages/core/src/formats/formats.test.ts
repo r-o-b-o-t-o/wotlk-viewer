@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseM2 } from "./m2.js";
@@ -16,8 +16,13 @@ const read = (p: string): ArrayBuffer => {
 };
 
 describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
-	const m2 = parseM2(read("Data/Character/Human/Male/HumanMale.M2"));
-	const skin = parseSkin(read("Data/Character/Human/Male/HumanMale00.skin"));
+	// Loaded in beforeAll, which a skipped suite never runs; a describe body always runs.
+	let m2: ReturnType<typeof parseM2>;
+	let skin: ReturnType<typeof parseSkin>;
+	beforeAll(() => {
+		m2 = parseM2(read("Data/Character/Human/Male/HumanMale.M2"));
+		skin = parseSkin(read("Data/Character/Human/Male/HumanMale00.skin"));
+	});
 
 	it("reads the header", () => {
 		expect(m2.name).toBe("HumanMale");

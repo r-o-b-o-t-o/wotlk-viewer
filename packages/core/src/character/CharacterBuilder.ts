@@ -69,16 +69,18 @@ const SLOT_TEXTURE_REGIONS: Partial<Record<EquipmentSlot, number[]>> = {
 	[EquipmentSlot.Tabard]: [3, 4],
 };
 
-/** Item.dbc SheatheType -> attachment point when the weapon is put away. */
-const SHEATH_ATTACHMENTS: Record<number, AttachmentId> = {
-	1: AttachmentId.SheathMainHand,
-	2: AttachmentId.SheathOffHand,
-	3: AttachmentId.LargeWeaponLeft,
-	4: AttachmentId.LargeWeaponRight,
-	5: AttachmentId.HipWeaponLeft,
-	6: AttachmentId.HipWeaponRight,
-	7: AttachmentId.SheathShield,
+/**
+ * Item.dbc SheatheType -> [main-hand, off-hand] attachment when the weapon is put away. Each type has
+ * its own bone with the orientation that pose needs, so picking the wrong one also tilts the weapon.
+ * Type 7 ("held in off hand", tomes and the like) has no sheathed pose and is hidden instead.
+ */
+const SHEATH_ATTACHMENTS: Record<number, [AttachmentId, AttachmentId]> = {
+	1: [AttachmentId.SheathMainHand, AttachmentId.SheathOffHand], // two-handers, hilt over the shoulder
+	2: [AttachmentId.LargeWeaponLeft, AttachmentId.LargeWeaponRight], // polearms and staves across the back
+	3: [AttachmentId.HipWeaponLeft, AttachmentId.HipWeaponRight], // one-handers on the hip
+	4: [AttachmentId.SheathShield, AttachmentId.SheathShield], // shields, centred on the back
 };
+const SHEATH_HIDDEN = 7;
 
 /** Body texture draw order (later slots draw on top). */
 const SLOT_ORDER = [
@@ -335,7 +337,8 @@ export class CharacterBuilder {
 			let attachment: AttachmentId;
 			// A drawn ranged weapon stays in hand even while the melee gear is put away.
 			if (app.sheathed && slot !== EquipmentSlot.Ranged) {
-				if (item.inventoryType === InventoryType.Holdable) continue; // held items vanish when sheathed
+				// Items with no sheathed pose simply vanish, as they do in the game.
+				if (item.sheatheType === SHEATH_HIDDEN || item.inventoryType === InventoryType.Holdable) continue;
 				attachment = pick(
 					sheathAttachment(item, offHand),
 					offHand ? AttachmentId.SheathOffHand : AttachmentId.SheathMainHand,
@@ -429,14 +432,10 @@ function objectComponentPath(folder: string, name: string, ext: "m2" | "blp"): s
 	return `Item\\ObjectComponents\\${folder}\\${stripExt(name)}.${ext}`;
 }
 
-/** Attachment for a put-away weapon; off-hand copies of "left" sheath types use the right-hand variant. */
+/** Attachment for a put-away weapon; unknown sheathe types fall back to the back sheath. */
 function sheathAttachment(item: ResolvedItem, offHand: boolean): AttachmentId {
 	if (item.inventoryType === InventoryType.Shield) return AttachmentId.SheathShield;
-	const a = SHEATH_ATTACHMENTS[item.sheatheType];
-	if (a === undefined) return offHand ? AttachmentId.SheathOffHand : AttachmentId.SheathMainHand;
-	if (!offHand) return a;
-	if (a === AttachmentId.LargeWeaponLeft) return AttachmentId.LargeWeaponRight;
-	if (a === AttachmentId.HipWeaponLeft) return AttachmentId.HipWeaponRight;
-	if (a === AttachmentId.SheathMainHand) return AttachmentId.SheathOffHand;
-	return a;
+	const pair = SHEATH_ATTACHMENTS[item.sheatheType];
+	if (!pair) return offHand ? AttachmentId.SheathOffHand : AttachmentId.SheathMainHand;
+	return pair[offHand ? 1 : 0];
 }

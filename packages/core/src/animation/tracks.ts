@@ -77,7 +77,8 @@ export function sampleTrack(keys: TrackKeys, time: number, out: Float32Array, is
 	}
 	if (interpolation === 0) return copy(values, lo * stride, out, comp);
 
-	const t = (time - times[lo]) / (times[hi] - times[lo]);
+	const span = times[hi] - times[lo];
+	const t = span > 0 ? (time - times[lo]) / span : 0; // duplicate timestamps must not yield NaN
 	const a = lo * stride,
 		b = hi * stride;
 	if (interpolation === 1 || isQuat) {

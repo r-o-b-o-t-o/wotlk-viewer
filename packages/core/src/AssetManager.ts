@@ -6,6 +6,7 @@ import { parseM2 } from "./formats/m2.js";
 import { parseSkin } from "./formats/skin.js";
 import { M2Model } from "./render/M2Model.js";
 import { blpToTexture, createWhiteTexture } from "./render/textures.js";
+import { memo } from "./util/memo.js";
 
 /** Loads and caches game files, parsed models, textures and DBC tables. */
 export class AssetManager {
@@ -26,13 +27,7 @@ export class AssetManager {
 
 	readFile(path: string): Promise<ArrayBuffer> {
 		const key = normalizePath(path);
-		let p = this.files.get(key);
-		if (!p) {
-			p = this.source.readFile(key);
-			this.files.set(key, p);
-			p.catch(() => this.files.delete(key));
-		}
-		return p;
+		return memo(this.files, key, () => this.source.readFile(key));
 	}
 
 	/** Like `readFile` but resolves to null for missing files. */
@@ -47,35 +42,25 @@ export class AssetManager {
 
 	fileExists(path: string): Promise<boolean> {
 		const key = normalizePath(path);
-		let p = this.exists.get(key);
-		if (!p) {
-			p = this.files.has(key)
+		return memo(this.exists, key, () =>
+			this.files.has(key)
 				? Promise.resolve(true)
 				: this.source.exists
 					? this.source.exists(key)
-					: this.tryReadFile(key).then((b) => b !== null);
-			this.exists.set(key, p);
-			p.catch(() => this.exists.delete(key));
-		}
-		return p;
+					: this.tryReadFile(key).then((b) => b !== null),
+		);
 	}
 
 	/** Loads an M2 model (accepts .m2/.mdx/.mdl paths) with its first skin profile. */
 	loadModel(path: string): Promise<M2Model> {
 		const key = normalizePath(path).replace(/\.(mdx|mdl)$/, ".m2");
-		let p = this.models.get(key);
-		if (!p) {
-			p = (async () => {
-				const [m2Buf, skinBuf] = await Promise.all([
-					this.readFile(key),
-					this.readFile(key.replace(/\.m2$/, "00.skin")),
-				]);
-				return new M2Model(key, parseM2(m2Buf), parseSkin(skinBuf));
-			})();
-			this.models.set(key, p);
-			p.catch(() => this.models.delete(key));
-		}
-		return p;
+		return memo(this.models, key, async () => {
+			const [m2Buf, skinBuf] = await Promise.all([
+				this.readFile(key),
+				this.readFile(key.replace(/\.m2$/, "00.skin")),
+			]);
+			return new M2Model(key, parseM2(m2Buf), parseSkin(skinBuf));
+		});
 	}
 
 	/** Loads the external .anim data of a sequence, if any. Resolves once the model can play it. */
@@ -90,21 +75,14 @@ export class AssetManager {
 
 	loadBlp(path: string): Promise<BlpImage> {
 		const key = normalizePath(path);
-		let p = this.blps.get(key);
-		if (!p) {
-			p = this.readFile(key).then(parseBlp);
-			this.blps.set(key, p);
-			p.catch(() => this.blps.delete(key));
-		}
-		return p;
+		return memo(this.blps, key, () => this.readFile(key).then(parseBlp));
 	}
 
 	/** Loads a BLP as a GPU texture. Missing files yield the white placeholder with a warning. */
 	loadTexture(path: string, wrapFlags = 0): Promise<Texture> {
 		const key = `${normalizePath(path)}|${wrapFlags}`;
-		let p = this.textures.get(key);
-		if (!p) {
-			p = this.loadBlp(path).then(
+		return memo(this.textures, key, () =>
+			this.loadBlp(path).then(
 				(img) => blpToTexture(img, { wrapFlags }),
 				(e) => {
 					console.warn(`Failed to load texture ${path}: ${e instanceof Error ? e.message : e}`);
@@ -112,20 +90,12 @@ export class AssetManager {
 					this.textures.delete(key);
 					return this.whiteTexture;
 				},
-			);
-			this.textures.set(key, p);
-		}
-		return p;
+			),
+		);
 	}
 
 	/** Loads a DBC table by name (e.g. "ChrRaces") from DBFilesClient. */
 	loadDbc(name: string): Promise<Dbc> {
-		let p = this.dbcs.get(name);
-		if (!p) {
-			p = this.readFile(`DBFilesClient/${name}.dbc`).then((b) => new Dbc(b));
-			this.dbcs.set(name, p);
-			p.catch(() => this.dbcs.delete(name));
-		}
-		return p;
+		return memo(this.dbcs, name, () => this.readFile(`DBFilesClient/${name}.dbc`).then((b) => new Dbc(b)));
 	}
 }

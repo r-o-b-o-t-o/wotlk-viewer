@@ -41,7 +41,12 @@ export async function createMiddleware(opts: ServerOptions): Promise<Middleware>
 
 	return (req, res, next) => {
 		const url = new URL(req.url ?? "/", "http://localhost");
-		const path = decodeURIComponent(url.pathname);
+		let path: string;
+		try {
+			path = decodeURIComponent(url.pathname);
+		} catch {
+			return json(res, 400, { error: "malformed url" }); // e.g. a dangling percent escape
+		}
 
 		if (path.startsWith(dataPrefix)) {
 			void (async () => {

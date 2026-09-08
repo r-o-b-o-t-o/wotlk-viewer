@@ -6,9 +6,9 @@ import { parseSkin } from "./skin.js";
 import { parseBlp } from "./blp.js";
 import { Dbc } from "./dbc.js";
 
-// Tests run against a real extracted client; skipped when it is absent.
-const CLIENT = process.env.WOW_CLIENT_DIR ?? "C:/Games/WoW/WoW_335a_Clean/Extracted";
-const hasClient = existsSync(join(CLIENT, "Data/Character/Human/Male/HumanMale.M2"));
+// Tests run against a real extracted client (WOW_CLIENT_DIR in .env); skipped when it is absent.
+const CLIENT = process.env.WOW_CLIENT_DIR ?? "";
+const hasClient = CLIENT !== "" && existsSync(join(CLIENT, "Data/Character/Human/Male/HumanMale.M2"));
 
 const read = (p: string): ArrayBuffer => {
 	const b = readFileSync(join(CLIENT, p));

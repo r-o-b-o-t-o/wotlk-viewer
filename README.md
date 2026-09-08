@@ -19,15 +19,13 @@ from an extracted game client and assembles fully equipped player characters.
 Requirements: Node 22+, an extracted 3.3.5a client (a folder containing `Data` and `Data_<locale>` subfolders with the
 MPQ contents), optionally an AzerothCore `characters` database.
 
+Copy `.env.example` to `.env` and point `WOW_CLIENT_DIR` at your extracted client (`WOW_DB_URL` is optional;
+without it the demo runs without the character API). Every package reads that one file.
+
 ```bash
+cp .env.example .env
 npm install
 npm run dev
-```
-
-The demo reads two environment variables (defaults are in `apps/demo/vite.config.ts`):
-
-```bash
-WOW_CLIENT_DIR="C:/Games/WoW/WoW_335a_Clean/Extracted" WOW_DB_URL="mysql://root:root@localhost:3306/acore_characters" npm run dev
 ```
 
 Other scripts: `npm test` (Vitest, parser and DBC tests run against the real client and are skipped when it is absent),
@@ -105,8 +103,8 @@ import { createMiddleware, startServer } from "@wotlk-viewer/server";
 
 // Standalone (CORS enabled), or plug the middleware into Vite/Express/Connect:
 await startServer({
-	clientDir: "C:/.../Extracted",
-	db: { user: "root", password: "root", database: "acore_characters" },
+	clientDir: process.env.WOW_CLIENT_DIR!,
+	db: { user: "root", password: "", database: "acore_characters" },
 	port: 8090,
 });
 ```

@@ -4,8 +4,8 @@ import { AssetManager, CharSectionType, GameData, Gender } from "@wotlk-viewer/c
 import { FsDataSource } from "./FsDataSource.js";
 import { defaultRoots, FileResolver } from "./files.js";
 
-const CLIENT = process.env.WOW_CLIENT_DIR ?? "C:/Games/WoW/WoW_335a_Clean/Extracted";
-const hasClient = existsSync(CLIENT);
+const CLIENT = process.env.WOW_CLIENT_DIR ?? "";
+const hasClient = CLIENT !== "" && existsSync(CLIENT);
 
 describe.skipIf(!hasClient)("FileResolver", () => {
 	it("resolves paths case-insensitively across roots", async () => {

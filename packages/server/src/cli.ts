@@ -1,10 +1,10 @@
 import { startServer } from "./index.js";
 import { dbOptionsFromUrl } from "./env.js";
 
-// Usage: WOW_CLIENT_DIR=<extracted client> [WOW_DB_URL=mysql://user:pass@host:3306/acore_characters] [PORT=8090]
+// Reads WOW_CLIENT_DIR, WOW_DB_URL and PORT; `npm start -w packages/server` loads them from .env.
 const clientDir = process.env.WOW_CLIENT_DIR;
 if (!clientDir) {
-	console.error("WOW_CLIENT_DIR is required");
+	console.error("WOW_CLIENT_DIR is not set; copy .env.example to .env");
 	process.exit(1);
 }
 

@@ -4,7 +4,7 @@ export interface BlpImage {
   width: number;
   height: number;
   /** RGBA8, row 0 = top. */
-  data: Uint8ClampedArray;
+  data: Uint8Array;
 }
 
 /** Decodes mip level 0 of a BLP2 texture to RGBA8. */
@@ -21,7 +21,7 @@ export function parseBlp(buffer: ArrayBuffer): BlpImage {
   const height = r.u32();
   const mipOffset = r.u32At(20);
   const mipSize = r.u32At(84);
-  const data = new Uint8ClampedArray(width * height * 4);
+  const data = new Uint8Array(width * height * 4);
 
   switch (encoding) {
     case 1: decodePalette(r, mipOffset, width, height, alphaDepth, data); break;
@@ -32,7 +32,7 @@ export function parseBlp(buffer: ArrayBuffer): BlpImage {
   return { width, height, data };
 }
 
-function decodePalette(r: BinaryReader, off: number, w: number, h: number, alphaDepth: number, out: Uint8ClampedArray): void {
+function decodePalette(r: BinaryReader, off: number, w: number, h: number, alphaDepth: number, out: Uint8Array): void {
   const n = w * h;
   const pal = 148; // 256 BGRA palette entries follow the header
   const alphaOff = off + n;
@@ -52,7 +52,7 @@ function decodePalette(r: BinaryReader, off: number, w: number, h: number, alpha
   }
 }
 
-function decodeRaw(src: Uint8Array, off: number, w: number, h: number, out: Uint8ClampedArray): void {
+function decodeRaw(src: Uint8Array, off: number, w: number, h: number, out: Uint8Array): void {
   const n = w * h;
   for (let i = 0; i < n; i++) {
     const p = off + i * 4;
@@ -65,7 +65,7 @@ function decodeRaw(src: Uint8Array, off: number, w: number, h: number, out: Uint
 
 function decodeDxt(
   src: Uint8Array, off: number, size: number, w: number, h: number,
-  alphaDepth: number, alphaEncoding: number, out: Uint8ClampedArray,
+  alphaDepth: number, alphaEncoding: number, out: Uint8Array,
 ): void {
   // alphaEncoding: 0 = DXT1, 1 = DXT3, 7 = DXT5. alphaDepth <= 1 is always DXT1.
   const mode = alphaDepth <= 1 ? 1 : alphaEncoding === 7 ? 5 : alphaEncoding === 1 ? 3 : 1;

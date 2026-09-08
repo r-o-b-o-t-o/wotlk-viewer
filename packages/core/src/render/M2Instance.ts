@@ -20,8 +20,9 @@ interface AttachedChild {
 const IDENTITY_BIND = new Matrix4();
 const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
+// Right-handed like a camera basis (right x up = back), so quads are not mirrored without a camera.
 const DEFAULT_BASIS: BillboardBasis = {
-	right: new Vector3(0, -1, 0),
+	right: new Vector3(0, 1, 0),
 	up: new Vector3(0, 0, 1),
 	back: new Vector3(1, 0, 0),
 };

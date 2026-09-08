@@ -182,7 +182,9 @@ export class M2Instance extends Object3D {
 	attachModel(child: M2Instance, attachmentId: number): boolean {
 		const { m2 } = this.model;
 		const idx = m2.attachmentLookup[attachmentId];
-		if (idx === undefined || idx < 0) return false;
+		if (idx === undefined || idx < 0 || idx >= m2.attachments.length) return false;
+		// An out-of-range bone would leave the render loop without a matrix to follow.
+		if (m2.attachments[idx].bone >= m2.bones.length) return false;
 		this.detachModel(child);
 		child.matrixAutoUpdate = false;
 		this.attached.push({ instance: child, attachment: m2.attachments[idx] });

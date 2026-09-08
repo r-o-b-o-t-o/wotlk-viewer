@@ -1,21 +1,21 @@
 {
-  "name": "@wotlk-viewer/server",
-  "version": "0.1.0",
-  "description": "Dev server serving extracted WoW client files and AzerothCore character data",
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
-  "scripts": {
-    "start": "tsx src/cli.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "dependencies": {
-    "@wotlk-viewer/core": "*",
-    "mysql2": "^3.14.0"
-  },
-  "devDependencies": {
-    "tsx": "^4.20.0"
-  }
+	"name": "@wotlk-viewer/server",
+	"version": "0.1.0",
+	"description": "Dev server serving extracted WoW client files and AzerothCore character data",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"start": "tsx src/cli.ts",
+		"build": "tsc -p tsconfig.build.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"@wotlk-viewer/core": "*",
+		"mysql2": "^3.14.0"
+	},
+	"devDependencies": {
+		"tsx": "^4.20.0"
+	}
 }

@@ -6,13 +6,13 @@ from an extracted game client and assembles fully equipped player characters.
 
 ## Packages
 
-| Package | Purpose |
-| --- | --- |
-| `@wotlk-viewer/core` | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, typed DBC access (`GameData`). UI-framework agnostic. |
+| Package                | Purpose                                                                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@wotlk-viewer/core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, typed DBC access (`GameData`). UI-framework agnostic.      |
 | `@wotlk-viewer/server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` for Node scripts and tests. |
-| `@wotlk-viewer/solid` | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`. |
-| `@wotlk-viewer/react` | The same components for React. |
-| `apps/demo` | SolidJS demo: browse database characters, tweak appearance and equipment, play animations. |
+| `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`.                                                                                                                                               |
+| `@wotlk-viewer/react`  | The same components for React.                                                                                                                                                                             |
+| `apps/demo`            | SolidJS demo: browse database characters, tweak appearance and equipment, play animations.                                                                                                                 |
 
 ## Getting started
 
@@ -37,20 +37,33 @@ Other scripts: `npm test` (Vitest, parser and DBC tests run against the real cli
 
 ```ts
 import {
-  AnimationId, AssetManager, CharacterBuilder, EquipmentSlot, GameData, Gender, HttpDataSource, Viewer,
-} from '@wotlk-viewer/core';
+	AnimationId,
+	AssetManager,
+	CharacterBuilder,
+	EquipmentSlot,
+	GameData,
+	Gender,
+	HttpDataSource,
+	Viewer,
+} from "@wotlk-viewer/core";
 
-const assets = new AssetManager(new HttpDataSource('/data')); // served by @wotlk-viewer/server
-const viewer = new Viewer({ container: document.getElementById('view')! });
+const assets = new AssetManager(new HttpDataSource("/data")); // served by @wotlk-viewer/server
+const viewer = new Viewer({ container: document.getElementById("view")! });
 viewer.start();
 
 const builder = new CharacterBuilder(assets, new GameData(assets), viewer.lighting);
 const character = await builder.build({
-  race: 1, gender: Gender.Male, skin: 2, face: 3, hairStyle: 5, hairColor: 1, facialStyle: 2,
-  items: [
-    { slot: EquipmentSlot.Chest, itemEntry: 40423 },     // resolved through Item.dbc
-    { slot: EquipmentSlot.MainHand, displayId: 56663 },  // or a display id directly
-  ],
+	race: 1,
+	gender: Gender.Male,
+	skin: 2,
+	face: 3,
+	hairStyle: 5,
+	hairColor: 1,
+	facialStyle: 2,
+	items: [
+		{ slot: EquipmentSlot.Chest, itemEntry: 40423 }, // resolved through Item.dbc
+		{ slot: EquipmentSlot.MainHand, displayId: 56663 }, // or a display id directly
+	],
 });
 viewer.add(character);
 viewer.frame();
@@ -86,10 +99,14 @@ automatic JSX runtime (Vite does this out of the box).
 ### Serving game data
 
 ```ts
-import { createMiddleware, startServer } from '@wotlk-viewer/server';
+import { createMiddleware, startServer } from "@wotlk-viewer/server";
 
 // Standalone (CORS enabled), or plug the middleware into Vite/Express/Connect:
-await startServer({ clientDir: 'C:/.../Extracted', db: { user: 'root', password: 'root', database: 'acore_characters' }, port: 8090 });
+await startServer({
+	clientDir: "C:/.../Extracted",
+	db: { user: "root", password: "root", database: "acore_characters" },
+	port: 8090,
+});
 ```
 
 Endpoints:

@@ -1,21 +1,24 @@
 {
-  "name": "wotlk-3d-viewer",
-  "private": true,
-  "type": "module",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
-  "scripts": {
-    "dev": "npm run dev -w apps/demo",
-    "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "vitest run"
-  },
-  "devDependencies": {
-    "@types/node": "^22.15.0",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.6",
-    "vitest": "^5.0.0"
-  }
+	"name": "wotlk-3d-viewer",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*",
+		"apps/*"
+	],
+	"scripts": {
+		"dev": "npm run dev -w apps/demo",
+		"build": "npm run build --workspaces --if-present",
+		"typecheck": "npm run typecheck --workspaces --if-present",
+		"test": "vitest run",
+		"format": "prettier --write .",
+		"format:check": "prettier --check ."
+	},
+	"devDependencies": {
+		"@types/node": "^22.15.0",
+		"prettier": "^3.9.6",
+		"typescript": "^5.9.3",
+		"vite": "^7.3.6",
+		"vitest": "^5.0.0"
+	}
 }

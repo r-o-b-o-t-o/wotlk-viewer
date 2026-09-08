@@ -1,32 +1,46 @@
 import {
-  type BlendingDstFactor, type BlendingSrcFactor,
-  AddEquation, CustomBlending, DoubleSide, DstColorFactor, FrontSide, Matrix4, NoBlending,
-  OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, SrcAlphaFactor, SrcColorFactor, Texture, Vector3, Vector4,
-  ZeroFactor,
-} from 'three';
-import { M2BlendMode, M2MaterialFlags } from '../formats/m2';
+	type BlendingDstFactor,
+	type BlendingSrcFactor,
+	AddEquation,
+	CustomBlending,
+	DoubleSide,
+	DstColorFactor,
+	FrontSide,
+	Matrix4,
+	NoBlending,
+	OneFactor,
+	OneMinusSrcAlphaFactor,
+	ShaderMaterial,
+	SrcAlphaFactor,
+	SrcColorFactor,
+	Texture,
+	Vector3,
+	Vector4,
+	ZeroFactor,
+} from "three";
+import { M2BlendMode, M2MaterialFlags } from "../formats/m2";
 
 /** Where a texture layer takes its UVs from. */
 export const enum TexCoordSource {
-  Uv0 = 0,
-  Uv1 = 1,
-  /** Sphere-mapped from the view-space normal. */
-  Env = 2,
+	Uv0 = 0,
+	Uv1 = 1,
+	/** Sphere-mapped from the view-space normal. */
+	Env = 2,
 }
 
 export interface M2MaterialOptions {
-  blendMode: number;
-  flags: number;
-  textureCount: number;
-  texCoords: [TexCoordSource, TexCoordSource];
+	blendMode: number;
+	flags: number;
+	textureCount: number;
+	texCoords: [TexCoordSource, TexCoordSource];
 }
 
 /** Scene lighting shared by all M2 materials. */
 export interface M2Lighting {
-  ambient: Vector3;
-  diffuse: Vector3;
-  /** Direction towards the light, view space. */
-  direction: Vector3;
+	ambient: Vector3;
+	diffuse: Vector3;
+	/** Direction towards the light, view space. */
+	direction: Vector3;
 }
 
 const VERTEX = /* glsl */ `
@@ -97,86 +111,88 @@ void main() {
 
 /** Material for one M2 render batch. Lighting is done in gamma space like the original client. */
 export class M2Material extends ShaderMaterial {
-  readonly blendMode: number;
-  readonly m2Flags: number;
+	readonly blendMode: number;
+	readonly m2Flags: number;
 
-  constructor(opts: M2MaterialOptions, lighting: M2Lighting, white: Texture) {
-    const { blendMode, flags } = opts;
-    super({
-      vertexShader: VERTEX,
-      fragmentShader: FRAGMENT,
-      uniforms: {
-        uTex0: { value: white },
-        uTex1: { value: white },
-        uTexMat0: { value: new Matrix4() },
-        uTexMat1: { value: new Matrix4() },
-        uTexCoord0: { value: opts.texCoords[0] },
-        uTexCoord1: { value: opts.texCoords[1] },
-        uTexCount: { value: opts.textureCount },
-        uColor: { value: new Vector4(1, 1, 1, 1) },
-        uAlphaTest: { value: blendMode === M2BlendMode.AlphaKey ? 0.5 : blendMode >= M2BlendMode.Alpha ? 1 / 255 : 0 },
-        uOpaque: { value: blendMode === M2BlendMode.Opaque },
-        uUnlit: { value: (flags & M2MaterialFlags.Unlit) !== 0 },
-        uAmbient: { value: lighting.ambient },
-        uDiffuse: { value: lighting.diffuse },
-        uLightDir: { value: lighting.direction },
-      },
-    });
-    this.blendMode = blendMode;
-    this.m2Flags = flags;
-    this.side = flags & M2MaterialFlags.TwoSided ? DoubleSide : FrontSide;
-    this.depthTest = !(flags & M2MaterialFlags.DepthTestOff);
-    this.depthWrite = !(flags & M2MaterialFlags.DepthWriteOff);
-    this.transparent = blendMode >= M2BlendMode.Alpha;
-    this.applyBlending(blendMode);
-  }
+	constructor(opts: M2MaterialOptions, lighting: M2Lighting, white: Texture) {
+		const { blendMode, flags } = opts;
+		super({
+			vertexShader: VERTEX,
+			fragmentShader: FRAGMENT,
+			uniforms: {
+				uTex0: { value: white },
+				uTex1: { value: white },
+				uTexMat0: { value: new Matrix4() },
+				uTexMat1: { value: new Matrix4() },
+				uTexCoord0: { value: opts.texCoords[0] },
+				uTexCoord1: { value: opts.texCoords[1] },
+				uTexCount: { value: opts.textureCount },
+				uColor: { value: new Vector4(1, 1, 1, 1) },
+				uAlphaTest: {
+					value: blendMode === M2BlendMode.AlphaKey ? 0.5 : blendMode >= M2BlendMode.Alpha ? 1 / 255 : 0,
+				},
+				uOpaque: { value: blendMode === M2BlendMode.Opaque },
+				uUnlit: { value: (flags & M2MaterialFlags.Unlit) !== 0 },
+				uAmbient: { value: lighting.ambient },
+				uDiffuse: { value: lighting.diffuse },
+				uLightDir: { value: lighting.direction },
+			},
+		});
+		this.blendMode = blendMode;
+		this.m2Flags = flags;
+		this.side = flags & M2MaterialFlags.TwoSided ? DoubleSide : FrontSide;
+		this.depthTest = !(flags & M2MaterialFlags.DepthTestOff);
+		this.depthWrite = !(flags & M2MaterialFlags.DepthWriteOff);
+		this.transparent = blendMode >= M2BlendMode.Alpha;
+		this.applyBlending(blendMode);
+	}
 
-  private applyBlending(mode: number): void {
-    this.blendEquation = AddEquation;
-    switch (mode) {
-      case M2BlendMode.Opaque:
-      case M2BlendMode.AlphaKey:
-        this.blending = NoBlending;
-        return;
-      case M2BlendMode.Alpha:
-        this.setBlend(SrcAlphaFactor, OneMinusSrcAlphaFactor);
-        return;
-      case M2BlendMode.NoAlphaAdd:
-        this.setBlend(OneFactor, OneFactor);
-        return;
-      case M2BlendMode.Add:
-        this.setBlend(SrcAlphaFactor, OneFactor);
-        return;
-      case M2BlendMode.Mod:
-        this.setBlend(DstColorFactor, ZeroFactor);
-        return;
-      case M2BlendMode.Mod2x:
-        this.setBlend(DstColorFactor, SrcColorFactor);
-        return;
-      default:
-        this.setBlend(OneFactor, OneMinusSrcAlphaFactor);
-    }
-  }
+	private applyBlending(mode: number): void {
+		this.blendEquation = AddEquation;
+		switch (mode) {
+			case M2BlendMode.Opaque:
+			case M2BlendMode.AlphaKey:
+				this.blending = NoBlending;
+				return;
+			case M2BlendMode.Alpha:
+				this.setBlend(SrcAlphaFactor, OneMinusSrcAlphaFactor);
+				return;
+			case M2BlendMode.NoAlphaAdd:
+				this.setBlend(OneFactor, OneFactor);
+				return;
+			case M2BlendMode.Add:
+				this.setBlend(SrcAlphaFactor, OneFactor);
+				return;
+			case M2BlendMode.Mod:
+				this.setBlend(DstColorFactor, ZeroFactor);
+				return;
+			case M2BlendMode.Mod2x:
+				this.setBlend(DstColorFactor, SrcColorFactor);
+				return;
+			default:
+				this.setBlend(OneFactor, OneMinusSrcAlphaFactor);
+		}
+	}
 
-  private setBlend(src: BlendingSrcFactor, dst: BlendingDstFactor): void {
-    this.blending = CustomBlending;
-    this.blendSrc = src;
-    this.blendDst = dst;
-    this.blendSrcAlpha = OneFactor;
-    this.blendDstAlpha = OneMinusSrcAlphaFactor;
-  }
+	private setBlend(src: BlendingSrcFactor, dst: BlendingDstFactor): void {
+		this.blending = CustomBlending;
+		this.blendSrc = src;
+		this.blendDst = dst;
+		this.blendSrcAlpha = OneFactor;
+		this.blendDstAlpha = OneMinusSrcAlphaFactor;
+	}
 
-  setTexture(layer: 0 | 1, texture: Texture): void {
-    this.uniforms[layer === 0 ? 'uTex0' : 'uTex1'].value = texture;
-  }
+	setTexture(layer: 0 | 1, texture: Texture): void {
+		this.uniforms[layer === 0 ? "uTex0" : "uTex1"].value = texture;
+	}
 
-  setColor(r: number, g: number, b: number, a: number): void {
-    (this.uniforms.uColor.value as Vector4).set(r, g, b, a);
-  }
+	setColor(r: number, g: number, b: number, a: number): void {
+		(this.uniforms.uColor.value as Vector4).set(r, g, b, a);
+	}
 
-  setTextureMatrix(layer: 0 | 1, m: Matrix4 | null): void {
-    const u = this.uniforms[layer === 0 ? 'uTexMat0' : 'uTexMat1'].value as Matrix4;
-    if (m) u.copy(m); else u.identity();
-  }
+	setTextureMatrix(layer: 0 | 1, m: Matrix4 | null): void {
+		const u = this.uniforms[layer === 0 ? "uTexMat0" : "uTexMat1"].value as Matrix4;
+		if (m) u.copy(m);
+		else u.identity();
+	}
 }
-

@@ -16,6 +16,7 @@ import {
 	CreatureBuilder,
 	GameData,
 	M2Instance,
+	mountInstance,
 	Viewer,
 	type AssetManager,
 	type CharacterAppearance,
@@ -25,7 +26,6 @@ import {
 const ViewerContext = createContext<() => Viewer | null>();
 
 export interface WowViewerProps extends ParentProps {
-	assets: AssetManager;
 	/** Clear color, null for transparent. */
 	background?: number | null;
 	antialias?: boolean;
@@ -37,7 +37,7 @@ export interface WowViewerProps extends ParentProps {
 
 /** Hosts a canvas with a running `Viewer`; children get it through `useViewer()`. */
 export function WowViewer(props: WowViewerProps): JSX.Element {
-	const [local, rest] = splitProps(props, ["assets", "background", "antialias", "ref", "children"]);
+	const [local, rest] = splitProps(props, ["background", "antialias", "ref", "children"]);
 	const [viewer, setViewer] = createSignal<Viewer | null>(null);
 	let canvas!: HTMLCanvasElement;
 
@@ -87,27 +87,17 @@ function useInstance(load: () => Promise<M2Instance>, key: () => unknown, props:
 
 	createEffect(
 		on(key, () => {
-			let cancelled = false;
-			load().then(
-				(inst) => {
-					if (cancelled) return inst.dispose();
-					viewer.add(inst);
+			const unmount = mountInstance(viewer, load, {
+				autoFrame: props.autoFrame,
+				onLoad: (inst) => {
 					setInstance(inst);
-					if (props.autoFrame ?? true) viewer.frame();
 					props.onLoad?.(inst);
 				},
-				(e) => {
-					if (!cancelled) props.onError?.(e);
-				},
-			);
+				onError: (e) => props.onError?.(e),
+			});
 			onCleanup(() => {
-				cancelled = true;
-				const inst = instance();
-				if (inst) {
-					viewer.remove(inst);
-					inst.dispose();
-					setInstance(null);
-				}
+				unmount();
+				setInstance(null);
 			});
 		}),
 	);

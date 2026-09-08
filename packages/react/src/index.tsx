@@ -4,6 +4,7 @@ import {
 	CreatureBuilder,
 	GameData,
 	M2Instance,
+	mountInstance,
 	Viewer,
 	type AssetManager,
 	type CharacterAppearance,
@@ -13,7 +14,6 @@ import {
 const ViewerContext = createContext<Viewer | null>(null);
 
 export interface WowViewerProps {
-	assets: AssetManager;
 	/** Clear color, null for transparent. */
 	background?: number | null;
 	antialias?: boolean;
@@ -25,10 +25,9 @@ export interface WowViewerProps {
 }
 
 /** Hosts a canvas with a running `Viewer`; children get it through `useViewer()`. */
-export function WowViewer({ assets, background, antialias, className, style, onViewer, children }: WowViewerProps) {
+export function WowViewer({ background, antialias, className, style, onViewer, children }: WowViewerProps) {
 	const canvas = useRef<HTMLCanvasElement>(null);
 	const [viewer, setViewer] = useState<Viewer | null>(null);
-	void assets;
 
 	useEffect(() => {
 		const opts: ViewerOptions = { canvas: canvas.current!, antialias };
@@ -71,34 +70,23 @@ interface InstanceProps {
 	onError?: (error: unknown) => void;
 }
 
-/** Shared loading/animation logic for `Model` and `Character`. */
+/** Shared loading/animation logic for `Model`, `Character` and `Creature`. */
 function useInstance(load: () => Promise<M2Instance>, deps: unknown[], props: InstanceProps) {
 	const viewer = useViewer();
 	const [instance, setInstance] = useState<M2Instance | null>(null);
 
 	useEffect(() => {
-		let cancelled = false;
-		let inst: M2Instance | null = null;
-		load().then(
-			(i) => {
-				if (cancelled) return i.dispose();
-				inst = i;
-				viewer.add(i);
-				setInstance(i);
-				if (props.autoFrame ?? true) viewer.frame();
-				props.onLoad?.(i);
+		const unmount = mountInstance(viewer, load, {
+			autoFrame: props.autoFrame,
+			onLoad: (inst) => {
+				setInstance(inst);
+				props.onLoad?.(inst);
 			},
-			(e) => {
-				if (!cancelled) props.onError?.(e);
-			},
-		);
+			onError: (e) => props.onError?.(e),
+		});
 		return () => {
-			cancelled = true;
-			if (inst) {
-				viewer.remove(inst);
-				inst.dispose();
-				setInstance(null);
-			}
+			unmount();
+			setInstance(null);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, deps);

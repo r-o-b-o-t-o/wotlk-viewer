@@ -92,7 +92,9 @@ export class M2Model {
 	 * Null when the track has no data or the sequence data is not loaded yet.
 	 */
 	keys(track: M2Track, seq: number, kind: TrackKind): TrackKeys | null {
-		if (track.globalSeq >= 0) seq = 0;
+		// Global sequences are keyed by slot 0 and their data always lives in the .m2 itself.
+		const global = track.globalSeq >= 0;
+		if (global) seq = 0;
 		let cache = this.keyCache.get(track);
 		if (!cache) {
 			cache = new Array(this.m2.sequences.length);
@@ -101,7 +103,7 @@ export class M2Model {
 		const hit = cache[seq];
 		if (hit !== undefined) return hit;
 		if (track.timestamps.length === 0) return (cache[seq] = null);
-		const r = this.seqReaders[seq];
+		const r = global ? this.m2.reader : this.seqReaders[seq];
 		if (!r) return null; // not cached: may become available once the .anim file loads
 		return (cache[seq] = readTrackKeys(r, track, seq, kind));
 	}

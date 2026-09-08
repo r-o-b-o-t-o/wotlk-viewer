@@ -86,19 +86,26 @@ export class Viewer {
     }
   }
 
-  /** Points the camera at the instances' bounds. */
-  frame(padding = 1.15): void {
+  /** Points the camera at the instances' bounds (attached models included). */
+  frame(padding = 1.3): void {
     if (this.instances.length === 0) return;
     this.scene.updateMatrixWorld(true);
     const box = new Box3();
-    for (const inst of this.instances) {
-      const { min, max } = inst.model.m2.boundingBox;
-      box.union(new Box3(new Vector3(...min), new Vector3(...max)).applyMatrix4(inst.matrixWorld));
-    }
+    const addBounds = (inst: M2Instance) => {
+      // Bind-pose geometry bounds; the M2 bounding box is often much looser.
+      const g = inst.model.geometry;
+      if (!g.boundingBox) g.computeBoundingBox();
+      box.union(g.boundingBox!.clone().applyMatrix4(inst.matrixWorld));
+      for (const a of inst.attached) addBounds(a.instance);
+    };
+    for (const inst of this.instances) addBounds(inst);
     const center = box.getCenter(new Vector3());
     const size = box.getSize(new Vector3());
     const radius = Math.max(size.x, size.y, size.z) * 0.5 * padding;
-    const dist = radius / Math.sin((this.camera.fov * Math.PI) / 360);
+    // Fit the height in the vertical FOV, or the width in the horizontal one.
+    const vFov = (this.camera.fov * Math.PI) / 360;
+    const hFov = Math.atan(Math.tan(vFov) * this.camera.aspect);
+    const dist = Math.max(size.y * 0.5 * padding / Math.tan(vFov), Math.max(size.x, size.z) * 0.5 * padding / Math.tan(hFov), radius * 0.5);
     this.controls.target.copy(center);
     this.camera.position.set(center.x + dist, center.y + radius * 0.15, center.z);
     this.controls.update();

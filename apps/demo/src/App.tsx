@@ -89,7 +89,7 @@ export function App(): JSX.Element {
     <div class="row">
       <label>{label}</label>
       <select value={value} onChange={(e) => set(Number(e.currentTarget.value))}>
-        <For each={values ?? [value]}>{(v) => <option value={v}>{v}</option>}</For>
+        <For each={values ?? [value]}>{(v) => <option value={v} selected={v === value}>{v}</option>}</For>
       </select>
     </div>
   );

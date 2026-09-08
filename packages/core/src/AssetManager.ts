@@ -1,5 +1,5 @@
 import type { Texture } from 'three';
-import { FileNotFoundError, normalizePath, type DataSource } from './data/DataSource';
+import { isFileNotFound, normalizePath, type DataSource } from './data/DataSource';
 import { Dbc } from './formats/dbc';
 import { parseBlp, type BlpImage } from './formats/blp';
 import { parseM2 } from './formats/m2';
@@ -10,6 +10,7 @@ import { blpToTexture, createWhiteTexture } from './render/textures';
 /** Loads and caches game files, parsed models, textures and DBC tables. */
 export class AssetManager {
   private readonly files = new Map<string, Promise<ArrayBuffer>>();
+  private readonly exists = new Map<string, Promise<boolean>>();
   private readonly models = new Map<string, Promise<M2Model>>();
   private readonly blps = new Map<string, Promise<BlpImage>>();
   private readonly textures = new Map<string, Promise<Texture>>();
@@ -39,13 +40,22 @@ export class AssetManager {
     try {
       return await this.readFile(path);
     } catch (e) {
-      if (e instanceof FileNotFoundError) return null;
+      if (isFileNotFound(e)) return null;
       throw e;
     }
   }
 
-  async fileExists(path: string): Promise<boolean> {
-    return (await this.tryReadFile(path)) !== null;
+  fileExists(path: string): Promise<boolean> {
+    const key = normalizePath(path);
+    let p = this.exists.get(key);
+    if (!p) {
+      p = this.files.has(key) ? Promise.resolve(true)
+        : this.source.exists ? this.source.exists(key)
+        : this.tryReadFile(key).then((b) => b !== null);
+      this.exists.set(key, p);
+      p.catch(() => this.exists.delete(key));
+    }
+    return p;
   }
 
   /** Loads an M2 model (accepts .m2/.mdx/.mdl paths) with its first skin profile. */
@@ -72,9 +82,8 @@ export class AssetManager {
     if (model.isSequenceLoaded(seq)) return;
     const path = model.animFilePath(seq);
     if (!path) return;
-    const buf = await this.tryReadFile(path);
-    if (buf) model.setSequenceData(seq, buf);
-    else console.warn(`Missing animation file ${path}`);
+    if (!(await this.fileExists(path))) return console.warn(`Missing animation file ${path}`);
+    model.setSequenceData(seq, await this.readFile(path));
   }
 
   loadBlp(path: string): Promise<BlpImage> {

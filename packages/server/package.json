@@ -6,15 +6,13 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "bin": {
-    "wotlk-viewer-server": "./bin/cli.js"
-  },
   "scripts": {
     "start": "tsx src/cli.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@wotlk-viewer/core": "*",
     "mysql2": "^3.14.0"
   },
   "devDependencies": {

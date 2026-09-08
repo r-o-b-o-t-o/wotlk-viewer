@@ -6,6 +6,7 @@ import { defaultRoots, FileResolver } from './files';
 
 export type { CharacterDetails, CharacterSummary, DbOptions, EquippedItem } from './db';
 export { CharacterDb, FileResolver, defaultRoots };
+export { FsDataSource } from './FsDataSource';
 
 export interface ServerOptions {
   /** Directory holding the extracted MPQ contents (e.g. `.../Extracted` with `Data` and `Data_enUS` inside). */
@@ -45,6 +46,11 @@ export async function createMiddleware(opts: ServerOptions): Promise<Middleware>
     if (path.startsWith(dataPrefix)) {
       void (async () => {
         const file = await resolver.resolve(path.slice(dataPrefix.length));
+        if (url.searchParams.has('exists')) {
+          // Existence probe: 200/204 instead of 404 so browsers do not log an error.
+          res.writeHead(file ? 200 : 204, { 'Access-Control-Allow-Origin': '*' });
+          return res.end();
+        }
         if (!file) return json(res, 404, { error: 'not found' });
         const size = (await stat(file)).size;
         res.writeHead(200, {

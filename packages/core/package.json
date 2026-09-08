@@ -1,0 +1,21 @@
+{
+  "name": "@wotlk-viewer/core",
+  "version": "0.1.0",
+  "description": "WebGL renderer for World of Warcraft: Wrath of the Lich King models (M2/BLP/DBC) built on three.js",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": ["src", "dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.0",
+    "three": "^0.185.0"
+  }
+}

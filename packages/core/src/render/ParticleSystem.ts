@@ -222,8 +222,9 @@ export class ParticleSystem {
 			samplePart(e.alpha, t, tmpV, 1);
 			const a = tmpV[0];
 			samplePart(e.scale, t, tmpV, 1);
+			// The scale track always carries both components, so a zero height is intentional.
 			const sx = tmpV[0] * 0.5 * p[o + 9];
-			const sy = (tmpV[1] || tmpV[0]) * 0.5 * p[o + 9];
+			const sy = tmpV[1] * 0.5 * p[o + 9];
 			let cell = p[o + 8];
 			if (cell < 0) {
 				samplePart(e.headCell, t, tmpV, 0);

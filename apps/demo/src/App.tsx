@@ -56,6 +56,7 @@ export function App(): JSX.Element {
 		items: [],
 		showHelm: true,
 		showCloak: true,
+		showTabard: true,
 	});
 	const [modelPath, setModelPath] = createSignal(MODELS[0]);
 	const [animation, setAnimation] = createSignal(0);
@@ -291,6 +292,14 @@ export function App(): JSX.Element {
 								onChange={(e) => setAppearance("showCloak", e.currentTarget.checked)}
 							/>{" "}
 							Cloak
+						</label>
+						<label>
+							<input
+								type="checkbox"
+								checked={appearance.showTabard}
+								onChange={(e) => setAppearance("showTabard", e.currentTarget.checked)}
+							/>{" "}
+							Tabard
 						</label>
 						<label>
 							<input

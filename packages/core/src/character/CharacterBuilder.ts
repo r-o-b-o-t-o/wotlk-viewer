@@ -45,6 +45,7 @@ export interface CharacterAppearance {
 	items?: CharacterItem[];
 	showHelm?: boolean;
 	showCloak?: boolean;
+	showTabard?: boolean;
 	/** Carry main/off-hand weapons on the back or hips instead of in the hands. */
 	sheathed?: boolean;
 	/**
@@ -159,6 +160,7 @@ export class CharacterBuilder {
 		const bySlot = new Map(items.map((i) => [i.slot, i]));
 		if (app.showHelm === false) bySlot.delete(EquipmentSlot.Head);
 		if (app.showCloak === false) bySlot.delete(EquipmentSlot.Back);
+		if (app.showTabard === false) bySlot.delete(EquipmentSlot.Tabard);
 		const chest = bySlot.get(EquipmentSlot.Chest);
 		const hasRobe = !!chest && chest.display.geosetGroups[2] > 0;
 

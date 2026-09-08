@@ -1,11 +1,11 @@
 import type { Texture } from "three";
-import { isFileNotFound, normalizePath, type DataSource } from "./data/DataSource";
-import { Dbc } from "./formats/dbc";
-import { parseBlp, type BlpImage } from "./formats/blp";
-import { parseM2 } from "./formats/m2";
-import { parseSkin } from "./formats/skin";
-import { M2Model } from "./render/M2Model";
-import { blpToTexture, createWhiteTexture } from "./render/textures";
+import { isFileNotFound, normalizePath, type DataSource } from "./data/DataSource.js";
+import { Dbc } from "./formats/dbc.js";
+import { parseBlp, type BlpImage } from "./formats/blp.js";
+import { parseM2 } from "./formats/m2.js";
+import { parseSkin } from "./formats/skin.js";
+import { M2Model } from "./render/M2Model.js";
+import { blpToTexture, createWhiteTexture } from "./render/textures.js";
 
 /** Loads and caches game files, parsed models, textures and DBC tables. */
 export class AssetManager {

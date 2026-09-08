@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { AssetManager, CharSectionType, GameData, Gender } from "@wotlk-viewer/core";
-import { FsDataSource } from "./FsDataSource";
-import { defaultRoots, FileResolver } from "./files";
+import { FsDataSource } from "./FsDataSource.js";
+import { defaultRoots, FileResolver } from "./files.js";
 
 const CLIENT = process.env.WOW_CLIENT_DIR ?? "C:/Games/WoW/WoW_335a_Clean/Extracted";
 const hasClient = existsSync(CLIENT);

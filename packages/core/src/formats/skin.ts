@@ -1,4 +1,4 @@
-import { BinaryReader } from "../io/BinaryReader";
+import { BinaryReader } from "../io/BinaryReader.js";
 
 /** .skin file (M2 skin profile): index buffer, submeshes and render batches. */
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseM2 } from "./m2";
-import { parseSkin } from "./skin";
-import { parseBlp } from "./blp";
-import { Dbc } from "./dbc";
+import { parseM2 } from "./m2.js";
+import { parseSkin } from "./skin.js";
+import { parseBlp } from "./blp.js";
+import { Dbc } from "./dbc.js";
 
 // Tests run against a real extracted client; skipped when it is absent.
 const CLIENT = process.env.WOW_CLIENT_DIR ?? "C:/Games/WoW/WoW_335a_Clean/Extracted";

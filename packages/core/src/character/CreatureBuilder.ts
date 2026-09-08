@@ -1,8 +1,8 @@
-import type { AssetManager } from "../AssetManager";
-import { M2TextureType } from "../formats/m2";
-import { M2Instance } from "../render/M2Instance";
-import type { M2Lighting } from "../render/M2Material";
-import type { GameData } from "./GameData";
+import type { AssetManager } from "../AssetManager.js";
+import { M2TextureType } from "../formats/m2.js";
+import { M2Instance } from "../render/M2Instance.js";
+import type { M2Lighting } from "../render/M2Material.js";
+import type { GameData } from "./GameData.js";
 
 /** Builds creature models from CreatureDisplayInfo ids (skin variations and scale). */
 export class CreatureBuilder {

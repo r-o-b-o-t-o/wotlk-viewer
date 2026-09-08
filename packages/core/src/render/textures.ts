@@ -9,7 +9,7 @@ import {
 	Texture,
 	UnsignedByteType,
 } from "three";
-import type { BlpImage } from "../formats/blp";
+import type { BlpImage } from "../formats/blp.js";
 
 export interface TextureOptions {
 	/** M2 texture flags: 1 = wrap X, 2 = wrap Y. */

@@ -1,4 +1,4 @@
-import { BinaryReader } from "../io/BinaryReader";
+import { BinaryReader } from "../io/BinaryReader.js";
 
 export interface BlpImage {
 	width: number;

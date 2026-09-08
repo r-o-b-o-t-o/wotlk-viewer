@@ -1,5 +1,5 @@
-import type { BlpImage } from "../formats/blp";
-import { CHAR_REGIONS, type CharRegion, type Rect } from "./constants";
+import type { BlpImage } from "../formats/blp.js";
+import { CHAR_REGIONS, type CharRegion, type Rect } from "./constants.js";
 
 const imageCanvases = new WeakMap<BlpImage, HTMLCanvasElement>();
 

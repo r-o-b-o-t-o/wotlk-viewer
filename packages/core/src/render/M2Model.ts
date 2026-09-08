@@ -1,8 +1,8 @@
 import { BufferAttribute, BufferGeometry } from "three";
-import { BinaryReader } from "../io/BinaryReader";
-import { M2SequenceFlags, type M2Data, type M2Track } from "../formats/m2";
-import type { SkinData } from "../formats/skin";
-import { readTrackKeys, type TrackKeys, type TrackKind } from "../animation/tracks";
+import { BinaryReader } from "../io/BinaryReader.js";
+import { M2SequenceFlags, type M2Data, type M2Track } from "../formats/m2.js";
+import type { SkinData } from "../formats/skin.js";
+import { readTrackKeys, type TrackKeys, type TrackKind } from "../animation/tracks.js";
 
 /**
  * A loaded model shared between instances: parsed M2 + skin profile, the GPU geometry

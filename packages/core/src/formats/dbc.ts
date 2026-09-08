@@ -1,4 +1,4 @@
-import { BinaryReader } from "../io/BinaryReader";
+import { BinaryReader } from "../io/BinaryReader.js";
 
 /** WDBC table: fixed-size records of 4-byte fields plus a string block. */
 export class Dbc {

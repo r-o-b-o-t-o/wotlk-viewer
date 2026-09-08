@@ -1,5 +1,5 @@
-import type { BinaryReader } from "../io/BinaryReader";
-import type { M2Track } from "../formats/m2";
+import type { BinaryReader } from "../io/BinaryReader.js";
+import type { M2Track } from "../formats/m2.js";
 
 export type TrackKind = "vec3" | "quat" | "compquat" | "fixed16" | "float" | "u8" | "u16";
 

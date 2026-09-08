@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { DataSource } from "@wotlk-viewer/core";
-import { defaultRoots, FileResolver } from "./files";
+import { defaultRoots, FileResolver } from "./files.js";
 
 // No runtime import from core: this file is bundled into Vite configs, where core's TS sources cannot be loaded.
 class FileNotFoundError extends Error {

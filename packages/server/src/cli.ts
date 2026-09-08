@@ -1,5 +1,5 @@
-import { startServer } from "./index";
-import { dbOptionsFromUrl } from "./env";
+import { startServer } from "./index.js";
+import { dbOptionsFromUrl } from "./env.js";
 
 // Usage: WOW_CLIENT_DIR=<extracted client> [WOW_DB_URL=mysql://user:pass@host:3306/acore_characters] [PORT=8090]
 const clientDir = process.env.WOW_CLIENT_DIR;

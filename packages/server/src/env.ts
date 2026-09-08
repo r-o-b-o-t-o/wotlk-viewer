@@ -1,4 +1,4 @@
-import type { DbOptions } from "./db";
+import type { DbOptions } from "./db.js";
 
 /** Parses `mysql://user:password@host:port/database`; undefined input yields undefined. */
 export function dbOptionsFromUrl(url: string | undefined): DbOptions | undefined {

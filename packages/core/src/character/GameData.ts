@@ -1,6 +1,6 @@
-import type { AssetManager } from "../AssetManager";
-import type { Dbc } from "../formats/dbc";
-import { CharSectionType, Gender } from "./constants";
+import type { AssetManager } from "../AssetManager.js";
+import type { Dbc } from "../formats/dbc.js";
+import { CharSectionType, Gender } from "./constants.js";
 
 /** Typed views over the DBC tables needed to build characters (3.3.5a layouts). */
 

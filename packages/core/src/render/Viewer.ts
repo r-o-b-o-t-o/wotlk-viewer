@@ -1,7 +1,7 @@
 import { Box3, Color, Group, LinearSRGBColorSpace, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { M2Lighting } from "./M2Material";
-import type { M2Instance } from "./M2Instance";
+import type { M2Lighting } from "./M2Material.js";
+import type { M2Instance } from "./M2Instance.js";
 
 export interface ViewerOptions {
 	/** Canvas to render into; created inside `container` when omitted. */

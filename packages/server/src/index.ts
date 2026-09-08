@@ -1,12 +1,12 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { CharacterDb, type DbOptions } from "./db";
-import { defaultRoots, FileResolver } from "./files";
+import { CharacterDb, type DbOptions } from "./db.js";
+import { defaultRoots, FileResolver } from "./files.js";
 
-export type { CharacterDetails, CharacterSummary, DbOptions, EquippedItem } from "./db";
+export type { CharacterDetails, CharacterSummary, DbOptions, EquippedItem } from "./db.js";
 export { CharacterDb, FileResolver, defaultRoots };
-export { FsDataSource } from "./FsDataSource";
+export { FsDataSource } from "./FsDataSource.js";
 
 export interface ServerOptions {
 	/** Directory holding the extracted MPQ contents (e.g. `.../Extracted` with `Data` and `Data_enUS` inside). */

@@ -34,7 +34,11 @@ export class FileResolver {
 		if (!p) {
 			p = readdir(dir).then(
 				(names) => new Map(names.map((n) => [n.toLowerCase(), n])),
-				() => new Map(),
+				// Forget failures (a missing root, or a transient EMFILE) so they are retried.
+				() => {
+					this.dirs.delete(dir);
+					return new Map<string, string>();
+				},
 			);
 			this.dirs.set(dir, p);
 		}

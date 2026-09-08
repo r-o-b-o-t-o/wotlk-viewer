@@ -92,7 +92,10 @@ export class Viewer {
 	/** Points the camera at the instances' bounds (attached models included). */
 	frame(padding = 1.3): void {
 		if (this.instances.length === 0) return;
+		this.camera.updateMatrixWorld();
 		this.scene.updateMatrixWorld(true);
+		// Attached models only get their matrix inside update(), which may not have run yet.
+		for (const inst of this.instances) inst.update(0, this.camera);
 		const box = new Box3();
 		const addBounds = (inst: M2Instance) => {
 			// Bind-pose geometry bounds; the M2 bounding box is often much looser.

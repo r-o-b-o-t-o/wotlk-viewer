@@ -38,6 +38,8 @@ void main() {
 
 // Particle state layout: x y z vx vy vz age life cell scaleMul (cell < 0 = follow the head cell track)
 const STRIDE = 10;
+// Quad corners as (right, up, cellU, cellV): (-r,+u) (+r,+u) (+r,-u) (-r,-u).
+const CORNERS = new Int8Array([-1, 1, 0, 0, 1, 1, 1, 0, 1, -1, 1, 1, -1, -1, 0, 1]);
 const tmpV = new Float32Array(4);
 const tmpPos = new Vector3();
 const tmpDir = new Vector3();
@@ -79,6 +81,8 @@ export class ParticleSystem {
 	private readonly uvs: Float32Array;
 	private readonly colors: Float32Array;
 	private readonly particles: Float32Array;
+	/** position, uv and aColor, kept for per-frame partial uploads. */
+	private readonly attributes: BufferAttribute[];
 	private count = 0;
 	private emitAccumulator = 0;
 
@@ -102,6 +106,7 @@ export class ParticleSystem {
 		this.geometry.setAttribute("aColor", new BufferAttribute(this.colors, 4).setUsage(DynamicDrawUsage));
 		this.geometry.setIndex(new BufferAttribute(index, 1));
 		this.geometry.setDrawRange(0, 0);
+		this.attributes = ["position", "uv", "aColor"].map((n) => this.geometry.attributes[n] as BufferAttribute);
 
 		this.material = new ShaderMaterial({
 			vertexShader: VERTEX,
@@ -205,6 +210,8 @@ export class ParticleSystem {
 	}
 
 	private buildQuads(basis: BillboardBasis): void {
+		this.geometry.setDrawRange(0, this.count * 6);
+		if (this.count === 0) return; // nothing to draw, so nothing to upload
 		const e = this.emitter;
 		const cols = Math.max(1, e.textureCols);
 		const rows = Math.max(1, e.textureRows);
@@ -239,28 +246,30 @@ export class ParticleSystem {
 				y = p[o + 1],
 				z = p[o + 2];
 			const v = i * 4;
-			// Corners: (-r,+u) (+r,+u) (+r,-u) (-r,-u) with matching texture cell corners.
-			const corners = [
-				[-1, 1, 0, 0],
-				[1, 1, 1, 0],
-				[1, -1, 1, 1],
-				[-1, -1, 0, 1],
-			];
 			for (let c = 0; c < 4; c++) {
-				const [cr, cuF, u, w] = corners[c];
+				const k = c * 4;
+				const cr = CORNERS[k],
+					cuF = CORNERS[k + 1];
 				const vi = (v + c) * 3;
 				pos[vi] = x + tmpRight.x * cr + tmpUp.x * cuF;
 				pos[vi + 1] = y + tmpRight.y * cr + tmpUp.y * cuF;
 				pos[vi + 2] = z + tmpRight.z * cr + tmpUp.z * cuF;
-				uv[(v + c) * 2] = cu + u / cols;
-				uv[(v + c) * 2 + 1] = cv + w / rows;
-				col.set([r, g, b, a], (v + c) * 4);
+				uv[(v + c) * 2] = cu + CORNERS[k + 2] / cols;
+				uv[(v + c) * 2 + 1] = cv + CORNERS[k + 3] / rows;
+				const ci = (v + c) * 4;
+				col[ci] = r;
+				col[ci + 1] = g;
+				col[ci + 2] = b;
+				col[ci + 3] = a;
 			}
 		}
-		this.geometry.setDrawRange(0, this.count * 6);
-		(this.geometry.attributes.position as BufferAttribute).needsUpdate = true;
-		(this.geometry.attributes.uv as BufferAttribute).needsUpdate = true;
-		(this.geometry.attributes.aColor as BufferAttribute).needsUpdate = true;
+		// Upload only the live quads instead of the whole 512-particle buffer.
+		const vertices = this.count * 4;
+		for (const attr of this.attributes) {
+			attr.clearUpdateRanges();
+			attr.addUpdateRange(0, vertices * attr.itemSize);
+			attr.needsUpdate = true;
+		}
 	}
 
 	dispose(): void {

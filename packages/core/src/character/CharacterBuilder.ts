@@ -268,7 +268,9 @@ export class CharacterBuilder {
 		layers.forEach((l, i) => {
 			if (images[i]) compositor.draw(images[i]!, l.region);
 		});
-		body.setReplaceableTexture(M2TextureType.Skin, canvasToTexture(compositor.canvas));
+		const skinTexture = canvasToTexture(compositor.canvas);
+		body.ownTexture(skinTexture); // built here, so this instance has to free it
+		body.setReplaceableTexture(M2TextureType.Skin, skinTexture);
 
 		if (hairSec?.textures[0])
 			body.setReplaceableTexture(M2TextureType.Hair, await this.assets.loadTexture(hairSec.textures[0]));

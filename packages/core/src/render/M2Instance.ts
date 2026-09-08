@@ -40,6 +40,8 @@ export class M2Instance extends Object3D {
 	readonly particles: ParticleSystem[];
 
 	private readonly skeleton: Skeleton;
+	/** Textures created for this instance alone; disposed with it. */
+	private readonly ownedTextures = new Set<Texture>();
 	private geosetFilter: (geosetId: number) => boolean = () => true;
 	private playToken = 0;
 	/** Animation id currently requested through `playAnimation`. */
@@ -254,11 +256,22 @@ export class M2Instance extends Object3D {
 		});
 	}
 
+	/**
+	 * Takes ownership of a texture this instance created itself (e.g. a composited character skin), so
+	 * `dispose()` frees it. Textures from `AssetManager` are shared and must not be passed here.
+	 */
+	ownTexture(texture: Texture): void {
+		this.ownedTextures.add(texture);
+	}
+
 	/** Releases GPU resources owned by this instance (not the shared model or cached textures). */
 	dispose(): void {
 		for (const m of this.materials) m.dispose();
 		for (const ps of this.particles) ps.dispose();
+		for (const t of this.ownedTextures) t.dispose();
+		this.ownedTextures.clear();
 		this.skeleton.dispose();
 		for (const { instance } of this.attached) instance.dispose();
+		this.attached.length = 0; // a second dispose() must not re-dispose the children
 	}
 }

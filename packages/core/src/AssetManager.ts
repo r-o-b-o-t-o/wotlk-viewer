@@ -77,7 +77,13 @@ export class AssetManager {
 
 	loadBlp(path: string): Promise<BlpImage> {
 		const key = normalizePath(path);
-		return memo(this.blps, key, () => this.readFile(key).then(parseBlp));
+		return memo(this.blps, key, async () => {
+			const img = parseBlp(await this.readFile(key));
+			// The decoded pixels are all anyone needs; drop the compressed source.
+			this.exists.set(key, Promise.resolve(true));
+			this.files.delete(key);
+			return img;
+		});
 	}
 
 	/** Loads a BLP as a GPU texture. Missing files yield the white placeholder with a warning. */

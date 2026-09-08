@@ -6,13 +6,13 @@ from an extracted game client and assembles fully equipped player characters.
 
 ## Packages
 
-| Package                | Purpose                                                                                                                                                                                                    |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@wotlk-viewer/core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, typed DBC access (`GameData`). UI-framework agnostic.      |
-| `@wotlk-viewer/server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` for Node scripts and tests. |
-| `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`.                                                                                                                                               |
-| `@wotlk-viewer/react`  | The same components for React.                                                                                                                                                                             |
-| `apps/demo`            | SolidJS demo: browse database characters, tweak appearance and equipment, play animations.                                                                                                                 |
+| Package                | Purpose                                                                                                                                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@wotlk-viewer/core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, typed DBC access (`GameData`). UI-framework agnostic.                                     |
+| `@wotlk-viewer/server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` (at `@wotlk-viewer/server/fs`) for Node scripts and tests. |
+| `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`.                                                                                                                                                                |
+| `@wotlk-viewer/react`  | The same components for React.                                                                                                                                                                                                            |
+| `apps/demo`            | SolidJS demo: browse database characters, tweak appearance and equipment, play animations.                                                                                                                                                |
 
 ## Getting started
 
@@ -83,13 +83,14 @@ once per frame and parent it under a group rotated by `-90°` around X (see `Vie
 ```tsx
 import { Character, WowViewer } from '@wotlk-viewer/solid';
 
-<WowViewer assets={assets}>
+<WowViewer>
   <Character assets={assets} appearance={appearance()} animation={AnimationId.Stand} onLoad={(inst) => ...} />
 </WowViewer>
 ```
 
 `<Model assets path="Creature\Murloc\Murloc.m2" />` shows a raw model, `<Creature assets displayId={188} />` a creature
-by display id. `useViewer()` gives children the `Viewer`.
+by display id. `useViewer()` gives children the `Viewer`. For other frameworks, `mountInstance(viewer, load, opts)`
+from the core package holds the same lifecycle (load, cancel, add, frame, dispose) behind one disposer.
 The package ships TSX source (like most Solid libraries); compile it with `vite-plugin-solid` in the consuming app.
 
 ### React
@@ -165,5 +166,8 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   because shading is done in gamma space; mixing in standard three.js materials needs color-management care.
 - DBC tables are assumed to use 4-byte fields (true for every 3.3.5a table read here). Little-endian host assumed.
 - Items whose entry is missing from the client's `Item.dbc` (custom server items) are skipped.
-- `HttpDataSource` probes existence with `?exists`; a backend without that support should implement
-  `DataSource.exists` differently or accept 404 noise in the console.
+- `HttpDataSource.exists` sends a HEAD with `?exists`, which @wotlk-viewer/server answers 200/204 to keep missing
+  files out of the browser console; any other backend just needs to answer 200 for a file that exists.
+- Decoded textures are held twice while a model is on screen: three.js keeps the pixels on `DataTexture.image.data`
+  after upload, and `AssetManager` caches the same `BlpImage` for the character skin compositor. The compressed
+  source buffer is released once a BLP is decoded.

@@ -74,12 +74,13 @@ import { Character, WowViewer } from '@wotlk-viewer/solid';
 </WowViewer>
 ```
 
-`<Model assets path="Creature\Murloc\Murloc.m2" />` shows a raw model. `useViewer()` gives children the `Viewer`.
+`<Model assets path="Creature\Murloc\Murloc.m2" />` shows a raw model, `<Creature assets displayId={188} />` a creature
+by display id. `useViewer()` gives children the `Viewer`.
 The package ships TSX source (like most Solid libraries); compile it with `vite-plugin-solid` in the consuming app.
 
 ### React
 
-Same API from `@wotlk-viewer/react` (`WowViewer`, `Model`, `Character`, `useViewer`). Needs a bundler with the
+Same API from `@wotlk-viewer/react` (`WowViewer`, `Model`, `Character`, `Creature`, `useViewer`). Needs a bundler with the
 automatic JSX runtime (Vite does this out of the box).
 
 ### Serving game data

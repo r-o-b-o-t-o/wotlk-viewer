@@ -1,7 +1,7 @@
 import { Matrix4, Quaternion, Vector3 } from "three";
-import { M2BoneFlags } from "../formats/m2";
-import type { M2Model } from "../render/M2Model";
-import { sampleTrack, type TrackKeys } from "./tracks";
+import { M2BoneFlags, type M2Track } from "../formats/m2.js";
+import type { M2Model } from "../render/M2Model.js";
+import { sampleTrack, type TrackKeys, type TrackKind } from "./tracks.js";
 
 const BILLBOARD_MASK =
 	M2BoneFlags.SphericalBillboard |
@@ -107,6 +107,11 @@ export class M2Animator {
 		return true;
 	}
 
+	/** Samples a scalar track at the current time; `fallback` when it has no data. */
+	sampleScalar(track: M2Track, kind: TrackKind, fallback: number): number {
+		return this.sample(this.model.keys(track, this.sequence, kind), track.globalSeq, tmpV) ? tmpV[0] : fallback;
+	}
+
 	private evaluateBones(billboard?: BillboardBasis): void {
 		const { m2 } = this.model;
 		const seq = this.sequence;
@@ -137,7 +142,7 @@ export class M2Animator {
 			if (bone.parentBone >= 0) world.multiplyMatrices(this.boneMatrices[bone.parentBone], local);
 			else world.copy(local);
 
-			if (billboard && bone.flags & BILLBOARD_MASK) applyBillboard(world, bone.pivot, billboard);
+			if (billboard && bone.flags & BILLBOARD_MASK) applyBillboard(world, bone.pivot, billboard, bone.flags);
 		}
 	}
 
@@ -190,20 +195,43 @@ const bbX = new Vector3(),
 	bbZ = new Vector3(),
 	bbPivot = new Vector3();
 
+/** Removes the component of `v` along unit vector `axis` and normalizes. */
+function projectOut(v: Vector3, axis: Vector3): Vector3 {
+	return v.addScaledVector(axis, -v.dot(axis)).normalize();
+}
+
 /**
- * Re-orients a billboarded bone so its local X axis faces the camera (Y = camera up, Z = -camera right),
- * keeping its scale and the pivot position. Cylindrical variants are treated as spherical.
+ * Re-orients a billboarded bone (scale and pivot position are kept). Spherical: X faces the camera,
+ * Y = camera right, Z = camera up, matching WoW's X-forward / Z-up bone space. Cylindrical variants keep
+ * the locked axis and turn around it towards the camera.
  */
-function applyBillboard(world: Matrix4, pivot: [number, number, number], basis: BillboardBasis): void {
+function applyBillboard(world: Matrix4, pivot: [number, number, number], basis: BillboardBasis, flags: number): void {
 	const e = world.elements;
 	const sx = Math.hypot(e[0], e[1], e[2]);
 	const sy = Math.hypot(e[4], e[5], e[6]);
 	const sz = Math.hypot(e[8], e[9], e[10]);
 	// World position of the pivot must stay put: p' = R' * pivot + t'  =>  t' = p - R' * pivot
 	bbPivot.set(pivot[0], pivot[1], pivot[2]).applyMatrix4(world);
-	bbX.copy(basis.back).multiplyScalar(sx);
-	bbY.copy(basis.up).multiplyScalar(sy);
-	bbZ.copy(basis.right).multiplyScalar(-sz);
+	if (flags & M2BoneFlags.CylindricalBillboardZ) {
+		bbZ.set(e[8], e[9], e[10]).normalize();
+		projectOut(bbX.copy(basis.back), bbZ);
+		bbY.crossVectors(bbZ, bbX);
+	} else if (flags & M2BoneFlags.CylindricalBillboardX) {
+		bbX.set(e[0], e[1], e[2]).normalize();
+		projectOut(bbZ.copy(basis.up), bbX);
+		bbY.crossVectors(bbZ, bbX);
+	} else if (flags & M2BoneFlags.CylindricalBillboardY) {
+		bbY.set(e[4], e[5], e[6]).normalize();
+		projectOut(bbX.copy(basis.back), bbY);
+		bbZ.crossVectors(bbX, bbY);
+	} else {
+		bbX.copy(basis.back);
+		bbY.copy(basis.right);
+		bbZ.copy(basis.up);
+	}
+	bbX.multiplyScalar(sx);
+	bbY.multiplyScalar(sy);
+	bbZ.multiplyScalar(sz);
 	e[0] = bbX.x;
 	e[1] = bbX.y;
 	e[2] = bbX.z;

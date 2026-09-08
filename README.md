@@ -142,9 +142,10 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Particle emitters use a simplified CPU simulation: camera-facing quads only (no tails, spin, tumble, wind or
   spline emitters) and no `ParticleColor.dbc` overrides. Ribbon emitters are not rendered.
 - Enchant visuals (`ItemVisuals.dbc`) are not shown.
-- Ranged weapons always hang on the back (`SheathMainHand`, or `SheathOffHand` when a sheathed two-hander already
-  uses it). `sheathed: true` moves main/off-hand weapons to the sheath attachments derived from `Item.dbc`
-  `SheatheType`; held off-hand items disappear when sheathed, like in the game.
+- A ranged weapon is only drawn on request (`drawRanged: true`), held in the left hand and the only thing held;
+  the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath
+  attachments derived from `Item.dbc` `SheatheType`, and held off-hand items disappear, like in the game.
+  Combining both gives the ranged stance: bow in hand, melee gear stowed.
 - Two-texture batches always use a multiply combiner and pre-Cataclysm shader ids are not decoded, so additive
   detail layers can look slightly off. Batches with more than two textures use the first two.
 - Bezier tracks are treated as hermite.

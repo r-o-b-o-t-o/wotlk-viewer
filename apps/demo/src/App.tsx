@@ -256,7 +256,7 @@ export function App(): JSX.Element {
 					{numberSelect("Facial", options()?.facialStyles, appearance.facialStyle ?? 0, (v) =>
 						setAppearance("facialStyle", v),
 					)}
-					<div class="row">
+					<div class="row toggles">
 						<label>
 							<input
 								type="checkbox"
@@ -280,6 +280,14 @@ export function App(): JSX.Element {
 								onChange={(e) => setAppearance("sheathed", e.currentTarget.checked)}
 							/>{" "}
 							Sheathed
+						</label>
+						<label>
+							<input
+								type="checkbox"
+								checked={appearance.drawRanged}
+								onChange={(e) => setAppearance("drawRanged", e.currentTarget.checked)}
+							/>{" "}
+							Ranged
 						</label>
 					</div>
 

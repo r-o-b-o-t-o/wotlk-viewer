@@ -42,6 +42,11 @@ export interface CharacterAppearance {
 	showCloak?: boolean;
 	/** Carry main/off-hand weapons on the back or hips instead of in the hands. */
 	sheathed?: boolean;
+	/**
+	 * Draw the ranged weapon into the left hand. Nothing else stays in hand, and this is the only way
+	 * to see it: the game never shows a ranged weapon while it is put away.
+	 */
+	drawRanged?: boolean;
 }
 
 interface ResolvedItem {
@@ -316,29 +321,29 @@ export class CharacterBuilder {
 		/** First candidate nothing else uses, so two weapons never share a slot. */
 		const pick = (...candidates: AttachmentId[]) =>
 			candidates.find((a) => !taken.has(a)) ?? candidates[candidates.length - 1];
-		for (const slot of [EquipmentSlot.MainHand, EquipmentSlot.OffHand, EquipmentSlot.Ranged]) {
+		// A ranged weapon only ever shows drawn, never sheathed, and then it is the only thing held.
+		// Sheathed melee gear still shows on the body, which with a drawn bow is the game's ranged stance.
+		const melee = [EquipmentSlot.MainHand, EquipmentSlot.OffHand];
+		const drawRanged = !!(app.drawRanged && bySlot.get(EquipmentSlot.Ranged)?.display.leftModel);
+		const heldSlots = drawRanged ? [EquipmentSlot.Ranged, ...(app.sheathed ? melee : [])] : melee;
+		for (const slot of heldSlots) {
 			const item = bySlot.get(slot);
 			if (!item?.display.leftModel) continue;
 			const isShield = item.inventoryType === InventoryType.Shield;
 			const folder = isShield ? "Shield" : "Weapon";
+			const offHand = slot === EquipmentSlot.OffHand;
 			let attachment: AttachmentId;
-			if (slot === EquipmentSlot.Ranged) {
-				// Ranged weapons hang on the back, beside whatever is already sheathed there.
-				attachment = pick(AttachmentId.SheathMainHand, AttachmentId.SheathOffHand);
-			} else if (app.sheathed) {
+			// A drawn ranged weapon stays in hand even while the melee gear is put away.
+			if (app.sheathed && slot !== EquipmentSlot.Ranged) {
 				if (item.inventoryType === InventoryType.Holdable) continue; // held items vanish when sheathed
-				const offHand = slot === EquipmentSlot.OffHand;
 				attachment = pick(
 					sheathAttachment(item, offHand),
 					offHand ? AttachmentId.SheathOffHand : AttachmentId.SheathMainHand,
 				);
+			} else if (slot === EquipmentSlot.Ranged) {
+				attachment = AttachmentId.HandLeft; // bows, guns and crossbows are carried in the left hand
 			} else {
-				attachment =
-					slot === EquipmentSlot.MainHand
-						? AttachmentId.HandRight
-						: isShield
-							? AttachmentId.Shield
-							: AttachmentId.HandLeft;
+				attachment = !offHand ? AttachmentId.HandRight : isShield ? AttachmentId.Shield : AttachmentId.HandLeft;
 			}
 			taken.add(attachment);
 			attachments.push(

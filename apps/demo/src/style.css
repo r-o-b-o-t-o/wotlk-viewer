@@ -61,6 +61,15 @@ body,
 	flex: 0 0 90px;
 	color: #aab;
 }
+/* Checkbox row: labels size to their text and wrap instead of widening the sidebar. */
+.toggles {
+	flex-wrap: wrap;
+	column-gap: 12px;
+}
+.toggles label {
+	flex: 0 0 auto;
+	color: #ddd;
+}
 .row select,
 .row input {
 	flex: 1;

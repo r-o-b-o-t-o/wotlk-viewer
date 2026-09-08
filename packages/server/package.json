@@ -4,7 +4,8 @@
 	"description": "Dev server serving extracted WoW client files and AzerothCore character data",
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./fs": "./src/FsDataSource.ts"
 	},
 	"scripts": {
 		"start": "tsx src/cli.ts",

@@ -6,7 +6,8 @@ import { defaultRoots, FileResolver } from "./files.js";
 
 export type { CharacterDetails, CharacterSummary, DbOptions, EquippedItem } from "./db.js";
 export { CharacterDb, FileResolver, defaultRoots };
-export { FsDataSource } from "./FsDataSource.js";
+// FsDataSource lives at `@wotlk-viewer/server/fs`; re-exporting it here would drag core's
+// TypeScript sources into Vite config bundles, which Node cannot load.
 
 export interface ServerOptions {
 	/** Directory holding the extracted MPQ contents (e.g. `.../Extracted` with `Data` and `Data_enUS` inside). */

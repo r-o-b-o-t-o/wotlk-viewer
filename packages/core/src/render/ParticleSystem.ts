@@ -36,8 +36,8 @@ void main() {
 }
 `;
 
-// Particle state layout: x y z vx vy vz age life
-const STRIDE = 8;
+// Particle state layout: x y z vx vy vz age life cell scaleMul (cell < 0 = follow the head cell track)
+const STRIDE = 10;
 const tmpV = new Float32Array(4);
 const tmpPos = new Vector3();
 const tmpDir = new Vector3();
@@ -178,8 +178,9 @@ export class ParticleSystem {
 			tmpPos.copy(tmpDir).multiplyScalar(radius);
 			if (!(e.flags & M2ParticleFlags.Outward)) tmpDir.set(0, 0, 1);
 		} else {
-			// Plane: spawn in a rectangle, moving along +Z within the given cone.
-			tmpPos.set(length * (Math.random() - 0.5), width * (Math.random() - 0.5), 0);
+			// Plane: spawn in a rectangle, moving along +Z within the given cone. The "width" runs along the
+			// bone's X axis (weapon glows span the blade with it), the "length" along Y.
+			tmpPos.set(width * (Math.random() - 0.5), length * (Math.random() - 0.5), 0);
 			tmpDir.set(Math.sin(polar) * Math.cos(azimuth), Math.sin(polar) * Math.sin(azimuth), Math.cos(polar));
 		}
 		tmpPos.x += e.position[0];
@@ -198,6 +199,9 @@ export class ParticleSystem {
 		p[o + 5] = tmpDir.z;
 		p[o + 6] = 0;
 		p[o + 7] = life;
+		p[o + 8] =
+			e.flags & M2ParticleFlags.RandomTexture ? Math.floor(Math.random() * e.textureRows * e.textureCols) : -1;
+		p[o + 9] = 1 + e.scaleVary[0] * rand2();
 	}
 
 	private buildQuads(basis: BillboardBasis): void {
@@ -218,10 +222,13 @@ export class ParticleSystem {
 			samplePart(e.alpha, t, tmpV, 1);
 			const a = tmpV[0];
 			samplePart(e.scale, t, tmpV, 1);
-			const sx = tmpV[0] * 0.5;
-			const sy = (tmpV[1] || tmpV[0]) * 0.5;
-			samplePart(e.headCell, t, tmpV, 0);
-			const cell = Math.round(tmpV[0]);
+			const sx = tmpV[0] * 0.5 * p[o + 9];
+			const sy = (tmpV[1] || tmpV[0]) * 0.5 * p[o + 9];
+			let cell = p[o + 8];
+			if (cell < 0) {
+				samplePart(e.headCell, t, tmpV, 0);
+				cell = Math.round(tmpV[0]);
+			}
 			const cu = (cell % cols) / cols;
 			const cv = Math.floor(cell / cols) / rows;
 

@@ -65,7 +65,14 @@ export async function createMiddleware(opts: ServerOptions): Promise<Middleware>
 					"Access-Control-Allow-Origin": "*",
 				});
 				if (req.method === "HEAD") return res.end();
-				createReadStream(file).pipe(res);
+				// Headers are already sent, so a read error can only be logged; destroy both ends.
+				const stream = createReadStream(file);
+				stream.on("error", (e) => {
+					console.error(`Error streaming ${file}: ${e.message}`);
+					res.destroy();
+				});
+				res.on("close", () => stream.destroy());
+				stream.pipe(res);
 			})().catch((e) => json(res, 500, { error: String(e) }));
 			return;
 		}

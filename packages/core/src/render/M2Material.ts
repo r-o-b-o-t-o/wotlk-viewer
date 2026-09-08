@@ -148,9 +148,6 @@ export function applyM2BlendMode(mat: Material, mode: number): void {
 
 /** Material for one M2 render batch. Lighting is done in gamma space like the original client. */
 export class M2Material extends ShaderMaterial {
-	readonly blendMode: number;
-	readonly m2Flags: number;
-
 	constructor(opts: M2MaterialOptions, lighting: M2Lighting, white: Texture) {
 		const { blendMode, flags } = opts;
 		super({
@@ -175,8 +172,6 @@ export class M2Material extends ShaderMaterial {
 				uLightDir: { value: lighting.direction },
 			},
 		});
-		this.blendMode = blendMode;
-		this.m2Flags = flags;
 		this.side = flags & M2MaterialFlags.TwoSided ? DoubleSide : FrontSide;
 		this.depthTest = !(flags & M2MaterialFlags.DepthTestOff);
 		this.depthWrite = !(flags & M2MaterialFlags.DepthWriteOff);

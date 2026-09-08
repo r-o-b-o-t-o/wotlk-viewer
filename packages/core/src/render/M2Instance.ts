@@ -45,8 +45,6 @@ export class M2Instance extends Object3D {
 	private readonly ownedTextures = new Set<Texture>();
 	private geosetFilter: (geosetId: number) => boolean = () => true;
 	private playToken = 0;
-	/** Animation id currently requested through `playAnimation`. */
-	currentAnimationId = 0;
 
 	constructor(
 		readonly model: M2Model,
@@ -166,7 +164,6 @@ export class M2Instance extends Object3D {
 	async playAnimation(animId: number, opts: PlayOptions = {}): Promise<boolean> {
 		const seq = this.model.findSequence(animId, opts.variation ?? 0);
 		if (seq < 0) return false;
-		this.currentAnimationId = animId;
 		await this.playSequence(seq, opts.loop);
 		return true;
 	}

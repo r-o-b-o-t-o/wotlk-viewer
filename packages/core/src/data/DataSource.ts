@@ -38,10 +38,12 @@ export class HttpDataSource implements DataSource {
 		return res.arrayBuffer();
 	}
 
-	/** The server answers `?exists` with 200 or 204, which keeps missing files out of the browser console. */
+	/**
+	 * Probes with HEAD. @wotlk-viewer/server answers `?exists` with 200 or 204 to keep missing files out of
+	 * the browser console; plain static servers answer 200 or 404. Only 200 counts as present.
+	 */
 	async exists(path: string): Promise<boolean> {
-		const res = await fetch(`${this.url(path)}?exists`);
-		if (!res.ok) throw new Error(`Failed to probe ${path}: ${res.status}`);
+		const res = await fetch(`${this.url(path)}?exists`, { method: "HEAD" });
 		return res.status === 200;
 	}
 }

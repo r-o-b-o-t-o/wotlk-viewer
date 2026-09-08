@@ -69,8 +69,10 @@ export class AssetManager {
 		if (model.isSequenceLoaded(seq)) return;
 		const path = model.animFilePath(seq);
 		if (!path) return;
-		if (!(await this.fileExists(path))) return console.warn(`Missing animation file ${path}`);
-		model.setSequenceData(seq, await this.readFile(path));
+		// Read straight away: probing first would double the round trips for a file that almost always exists.
+		const data = await this.tryReadFile(path);
+		if (!data) return console.warn(`Missing animation file ${path}`);
+		model.setSequenceData(seq, data);
 	}
 
 	loadBlp(path: string): Promise<BlpImage> {

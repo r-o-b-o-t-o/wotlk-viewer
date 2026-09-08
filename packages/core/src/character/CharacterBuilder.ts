@@ -132,10 +132,14 @@ export class CharacterBuilder {
 	async build(app: CharacterAppearance): Promise<M2Instance> {
 		const { race, gender } = app;
 		const sex = gender === Gender.Female ? 1 : 0;
-		const [modelPath, raceRec, items] = await Promise.all([
+		// Everything here is independent, so one round of requests instead of six.
+		const [modelPath, raceRec, items, hair, facial, helmetVis] = await Promise.all([
 			this.data.characterModelPath(race, gender),
 			this.data.races().then((r) => r.get(race)!),
 			this.resolveItems(app.items ?? []),
+			this.data.findHairGeoset(race, sex, app.hairStyle ?? 0),
+			this.data.findFacialHairStyle(race, sex, app.facialStyle ?? 0),
+			this.data.helmetGeosetVisData(),
 		]);
 		const model = await this.assets.loadModel(modelPath);
 		const body = await M2Instance.create(model, this.assets, this.lighting);
@@ -150,10 +154,8 @@ export class CharacterBuilder {
 		const groups = new Map<number, number>();
 		for (let g = 1; g <= 18; g++) groups.set(g, 1);
 		groups.set(GeosetGroup.Ears, 2);
-		const hair = await this.data.findHairGeoset(race, sex, app.hairStyle ?? 0);
 		// Geoset 1 is the bald scalp cap; bald styles reference geoset 0.
 		groups.set(GeosetGroup.Hair, hair?.geoset || 1);
-		const facial = await this.data.findFacialHairStyle(race, sex, app.facialStyle ?? 0);
 		const fg = facial?.geosets ?? [0, 0, 0, 0, 0];
 		groups.set(GeosetGroup.Facial1, fg[0]);
 		groups.set(GeosetGroup.Facial3, fg[1]);
@@ -198,7 +200,7 @@ export class CharacterBuilder {
 		let hideHair = false;
 		const head = bySlot.get(EquipmentSlot.Head);
 		if (head) {
-			const vis = (await this.data.helmetGeosetVisData()).get(head.display.helmetGeosetVis[sex]);
+			const vis = helmetVis.get(head.display.helmetGeosetVis[sex]);
 			if (vis) {
 				const bit = 1 << (race - 1);
 				const hides = (i: number) => (vis.hideGeoset[i] & bit) !== 0;
@@ -272,27 +274,28 @@ export class CharacterBuilder {
 		body.ownTexture(skinTexture); // built here, so this instance has to free it
 		body.setReplaceableTexture(M2TextureType.Skin, skinTexture);
 
-		if (hairSec?.textures[0])
-			body.setReplaceableTexture(M2TextureType.Hair, await this.assets.loadTexture(hairSec.textures[0]));
-		if (skinSec.textures[1])
-			body.setReplaceableTexture(M2TextureType.SkinExtra, await this.assets.loadTexture(skinSec.textures[1]));
-		if (back?.display.leftModelTexture) {
-			body.setReplaceableTexture(
-				M2TextureType.ObjectSkin,
-				await this.assets.loadTexture(`Item\\ObjectComponents\\Cape\\${back.display.leftModelTexture}.blp`),
-			);
-		}
+		const load = (path: string | undefined) => (path ? this.assets.loadTexture(path) : null);
+		const [hairTex, skinExtraTex, capeTex] = await Promise.all([
+			load(hairSec?.textures[0]),
+			load(skinSec.textures[1]),
+			load(back?.display.leftModelTexture && objectComponentPath("Cape", back.display.leftModelTexture, "blp")),
+		]);
+		if (hairTex) body.setReplaceableTexture(M2TextureType.Hair, hairTex);
+		if (skinExtraTex) body.setReplaceableTexture(M2TextureType.SkinExtra, skinExtraTex);
+		if (capeTex) body.setReplaceableTexture(M2TextureType.ObjectSkin, capeTex);
 
 		// --- attached item models ----------------------------------------------
 		const prefix = raceRec.clientPrefix + genderSuffix;
 		const attachments: Promise<void>[] = [];
 		if (head) {
+			const d = head.display;
+			// Helms come in a variant per race and gender.
 			attachments.push(
 				this.attachItem(
 					body,
-					`Item\\ObjectComponents\\Head\\${stripExt(head.display.leftModel)}_${prefix}.m2`,
-					head.display.leftModelTexture,
 					"Head",
+					`${stripExt(d.leftModel)}_${prefix}`,
+					d.leftModelTexture,
 					AttachmentId.Helm,
 				),
 			);
@@ -302,23 +305,11 @@ export class CharacterBuilder {
 			const d = shoulders.display;
 			if (d.leftModel)
 				attachments.push(
-					this.attachItem(
-						body,
-						`Item\\ObjectComponents\\Shoulder\\${stripExt(d.leftModel)}.m2`,
-						d.leftModelTexture,
-						"Shoulder",
-						AttachmentId.ShoulderLeft,
-					),
+					this.attachItem(body, "Shoulder", d.leftModel, d.leftModelTexture, AttachmentId.ShoulderLeft),
 				);
 			if (d.rightModel)
 				attachments.push(
-					this.attachItem(
-						body,
-						`Item\\ObjectComponents\\Shoulder\\${stripExt(d.rightModel)}.m2`,
-						d.rightModelTexture,
-						"Shoulder",
-						AttachmentId.ShoulderRight,
-					),
+					this.attachItem(body, "Shoulder", d.rightModel, d.rightModelTexture, AttachmentId.ShoulderRight),
 				);
 		}
 		const taken = new Set<AttachmentId>();
@@ -351,13 +342,7 @@ export class CharacterBuilder {
 			}
 			taken.add(attachment);
 			attachments.push(
-				this.attachItem(
-					body,
-					`Item\\ObjectComponents\\${folder}\\${stripExt(item.display.leftModel)}.m2`,
-					item.display.leftModelTexture,
-					folder,
-					attachment,
-				),
+				this.attachItem(body, folder, item.display.leftModel, item.display.leftModelTexture, attachment),
 			);
 		}
 		await Promise.all(attachments);
@@ -377,7 +362,7 @@ export class CharacterBuilder {
 				it.inventoryType ?? rec?.inventoryType ?? SLOT_INVENTORY_TYPE[it.slot] ?? InventoryType.NonEquip;
 			// Off-hand shields when only a display id is known: guess from the model folder.
 			if (it.slot === EquipmentSlot.OffHand && it.inventoryType === undefined && !rec && display.leftModel) {
-				if (await this.assets.fileExists(`Item\\ObjectComponents\\Shield\\${stripExt(display.leftModel)}.m2`))
+				if (await this.assets.fileExists(objectComponentPath("Shield", display.leftModel, "m2")))
 					inventoryType = InventoryType.Shield;
 			}
 			out.push({ slot: it.slot, display, inventoryType, sheatheType: rec?.sheatheType ?? 0 });
@@ -387,10 +372,11 @@ export class CharacterBuilder {
 
 	/** Item region textures come as `<name>_<M|F>.blp` with `_U.blp` as the unisex fallback. */
 	private async resolveItemTexture(folder: string, name: string, gender: string): Promise<string | null> {
-		for (const suffix of [gender, "U"]) {
-			const path = `Item\\TextureComponents\\${folder}\\${name}_${suffix}.blp`;
-			if (await this.assets.fileExists(path)) return path;
-		}
+		const paths = [gender, "U"].map((suffix) => `Item\\TextureComponents\\${folder}\\${name}_${suffix}.blp`);
+		// Probe both at once; the gendered variant still wins when both are present.
+		const found = await Promise.all(paths.map((p) => this.assets.fileExists(p)));
+		const i = found.indexOf(true);
+		if (i >= 0) return paths[i];
 		console.warn(`Missing item texture ${folder}/${name}`);
 		return null;
 	}
@@ -404,20 +390,22 @@ export class CharacterBuilder {
 		}
 	}
 
+	/** Loads one item model from `Item\ObjectComponents\<folder>` and hangs it off `attachment`. */
 	private async attachItem(
 		body: M2Instance,
-		modelPath: string,
-		texture: string,
 		folder: string,
+		modelName: string,
+		texture: string,
 		attachment: AttachmentId,
 	): Promise<void> {
+		const modelPath = objectComponentPath(folder, modelName, "m2");
 		try {
 			const model = await this.assets.loadModel(modelPath);
 			const inst = await M2Instance.create(model, this.assets, this.lighting);
 			if (texture && inst.hasTextureType(M2TextureType.ObjectSkin)) {
 				inst.setReplaceableTexture(
 					M2TextureType.ObjectSkin,
-					await this.assets.loadTexture(`Item\\ObjectComponents\\${folder}\\${texture}.blp`),
+					await this.assets.loadTexture(objectComponentPath(folder, texture, "blp")),
 				);
 			}
 			if (!body.attachModel(inst, attachment)) inst.dispose();
@@ -429,6 +417,11 @@ export class CharacterBuilder {
 
 function stripExt(name: string): string {
 	return name.replace(/\.(mdx|mdl|m2)$/i, "");
+}
+
+/** `Item\ObjectComponents\<folder>\<name>.<ext>`; DBC model names carry an .mdx extension. */
+function objectComponentPath(folder: string, name: string, ext: "m2" | "blp"): string {
+	return `Item\\ObjectComponents\\${folder}\\${stripExt(name)}.${ext}`;
 }
 
 /** Attachment for a put-away weapon; off-hand copies of "left" sheath types use the right-hand variant. */

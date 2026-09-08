@@ -108,6 +108,8 @@ export class AssetManager {
 				(img) => blpToTexture(img, { wrapFlags }),
 				(e) => {
 					console.warn(`Failed to load texture ${path}: ${e instanceof Error ? e.message : e}`);
+					// Drop the entry so a transient failure is not remembered as a white texture.
+					this.textures.delete(key);
 					return this.whiteTexture;
 				},
 			);

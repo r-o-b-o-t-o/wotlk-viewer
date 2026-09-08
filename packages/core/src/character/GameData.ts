@@ -1,5 +1,6 @@
 import type { AssetManager } from "../AssetManager.js";
 import type { Dbc } from "../formats/dbc.js";
+import { memo } from "../util/memo.js";
 import { CharSectionType, Gender } from "./constants.js";
 
 /** Typed views over the DBC tables needed to build characters (3.3.5a layouts). */
@@ -98,13 +99,12 @@ export class GameData {
 	constructor(readonly assets: AssetManager) {}
 
 	private table<T>(name: string, build: (dbc: Dbc) => T): Promise<T> {
-		let p = this.cache.get(name) as Promise<T> | undefined;
-		if (!p) {
-			p = this.assets.loadDbc(name).then(build);
-			this.cache.set(name, p);
-			p.catch(() => this.cache.delete(name));
-		}
-		return p;
+		return memo(this.cache as Map<string, Promise<T>>, name, () => this.assets.loadDbc(name).then(build));
+	}
+
+	/** Memoizes a value derived from one or more tables (indexes, groupings). */
+	private derived<T>(key: string, build: () => Promise<T>): Promise<T> {
+		return memo(this.cache as Map<string, Promise<T>>, `derived:${key}`, build);
 	}
 
 	races(): Promise<Map<number, ChrRace>> {
@@ -248,6 +248,37 @@ export class GameData {
 		return cmd.modelName;
 	}
 
+	/** Sections grouped by `race|sex`, each also indexed by `type|variation|color`. */
+	private sectionIndex(): Promise<Map<string, Map<string, CharSection>>> {
+		return this.derived("charSections", async () =>
+			groupIndex(
+				await this.charSections(),
+				(s) => `${s.race}|${s.sex}`,
+				(s) => `${s.type}|${s.variation}|${s.color}`,
+			),
+		);
+	}
+
+	private hairIndex(): Promise<Map<string, Map<string, CharHairGeoset>>> {
+		return this.derived("charHairGeosets", async () =>
+			groupIndex(
+				await this.charHairGeosets(),
+				(h) => `${h.race}|${h.sex}`,
+				(h) => String(h.variation),
+			),
+		);
+	}
+
+	private facialIndex(): Promise<Map<string, Map<string, FacialHairStyle>>> {
+		return this.derived("facialHairStyles", async () =>
+			groupIndex(
+				await this.facialHairStyles(),
+				(f) => `${f.race}|${f.sex}`,
+				(f) => String(f.variation),
+			),
+		);
+	}
+
 	async findCharSection(
 		race: number,
 		sex: number,
@@ -255,45 +286,52 @@ export class GameData {
 		variation: number,
 		color: number,
 	): Promise<CharSection | undefined> {
-		const sections = await this.charSections();
-		return sections.find(
-			(s) =>
-				s.race === race && s.sex === sex && s.type === type && s.variation === variation && s.color === color,
-		);
+		return (await this.sectionIndex()).get(`${race}|${sex}`)?.get(`${type}|${variation}|${color}`);
 	}
 
 	async findHairGeoset(race: number, sex: number, variation: number): Promise<CharHairGeoset | undefined> {
-		return (await this.charHairGeosets()).find(
-			(h) => h.race === race && h.sex === sex && h.variation === variation,
-		);
+		return (await this.hairIndex()).get(`${race}|${sex}`)?.get(String(variation));
 	}
 
 	async findFacialHairStyle(race: number, sex: number, variation: number): Promise<FacialHairStyle | undefined> {
-		return (await this.facialHairStyles()).find(
-			(f) => f.race === race && f.sex === sex && f.variation === variation,
-		);
+		return (await this.facialIndex()).get(`${race}|${sex}`)?.get(String(variation));
 	}
 
 	/** Lists valid customization values for a race/gender (character-creation sections only). */
 	async customizationOptions(race: number, sex: number): Promise<CustomizationOptions> {
-		const sections = (await this.charSections()).filter((s) => s.race === race && s.sex === sex);
+		const group = `${race}|${sex}`;
+		const [sectionIndex, hairIndex, facialIndex] = await Promise.all([
+			this.sectionIndex(),
+			this.hairIndex(),
+			this.facialIndex(),
+		]);
+		const sections = [...(sectionIndex.get(group)?.values() ?? [])];
 		const uniq = (values: number[]) => [...new Set(values)].sort((a, b) => a - b);
 		const of = (type: CharSectionType, key: "variation" | "color") =>
 			uniq(sections.filter((s) => s.type === type).map((s) => s[key]));
 		return {
 			skins: of(CharSectionType.Skin, "color"),
 			faces: of(CharSectionType.Face, "variation"),
-			hairStyles: uniq(
-				(await this.charHairGeosets()).filter((h) => h.race === race && h.sex === sex).map((h) => h.variation),
-			),
+			hairStyles: uniq([...(hairIndex.get(group)?.values() ?? [])].map((h) => h.variation)),
 			hairColors: of(CharSectionType.Hair, "color"),
-			facialStyles: uniq(
-				(await this.facialHairStyles()).filter((f) => f.race === race && f.sex === sex).map((f) => f.variation),
-			),
+			facialStyles: uniq([...(facialIndex.get(group)?.values() ?? [])].map((f) => f.variation)),
 		};
 	}
 }
 
 function byId<T extends { id: number }>(rows: T[]): Map<number, T> {
 	return new Map(rows.map((r) => [r.id, r]));
+}
+
+/** Two-level index; the first row wins for a duplicate key, matching a linear `find`. */
+function groupIndex<T>(rows: T[], group: (row: T) => string, key: (row: T) => string): Map<string, Map<string, T>> {
+	const out = new Map<string, Map<string, T>>();
+	for (const row of rows) {
+		const g = group(row);
+		let inner = out.get(g);
+		if (!inner) out.set(g, (inner = new Map()));
+		const k = key(row);
+		if (!inner.has(k)) inner.set(k, row);
+	}
+	return out;
 }

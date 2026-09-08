@@ -185,6 +185,8 @@ export class M2Instance extends Object3D {
 		if (m2.attachments[idx].bone >= m2.bones.length) return false;
 		this.detachModel(child);
 		child.matrixAutoUpdate = false;
+		// Items draw before the body, so a helmet's translucent parts cannot paint over the face behind it.
+		child.mesh.renderOrder = this.mesh.renderOrder - 1;
 		this.attached.push({ instance: child, attachment: m2.attachments[idx] });
 		this.add(child);
 		return true;

@@ -156,6 +156,8 @@ export class M2Material extends ShaderMaterial {
 		super({
 			vertexShader: VERTEX,
 			fragmentShader: FRAGMENT,
+			// three.js only defines USE_UV1 for built-in map channels, so declare it here to get `uv1`.
+			defines: { USE_UV1: "" },
 			uniforms: {
 				uTex0: { value: white },
 				uTex1: { value: white },

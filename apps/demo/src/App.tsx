@@ -1,4 +1,4 @@
-import { createResource, createSignal, For, Show, type JSX } from 'solid-js';
+import { createEffect, createResource, createSignal, For, on, Show, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import {
   AssetManager, EquipmentSlot, GameData, HttpDataSource, type CharacterAppearance, type CharacterItem, type M2Instance,
@@ -48,6 +48,10 @@ export function App(): JSX.Element {
 
   const [races] = createResource(() => gameData.races());
   const [animNames] = createResource(() => gameData.animationNames());
+
+  let animSelect!: HTMLSelectElement;
+  // Sync the select after its options are (re)rendered; a plain `value` prop is applied before they exist.
+  createEffect(on([animIds, animNames, animation], () => queueMicrotask(() => { animSelect.value = String(animation()); })));
   const [options] = createResource(
     () => [appearance.race, appearance.gender] as const,
     ([race, gender]) => gameData.customizationOptions(race, gender),
@@ -186,8 +190,8 @@ export function App(): JSX.Element {
         <h2>Animation</h2>
         <div class="row">
           <label>Animation</label>
-          <select value={animation()} onChange={(e) => setAnimation(Number(e.currentTarget.value))}>
-            <For each={animIds()}>{(id) => <option value={id} selected={id === animation()}>{animNames()?.get(id) ?? id}</option>}</For>
+          <select ref={animSelect} onChange={(e) => setAnimation(Number(e.currentTarget.value))}>
+            <For each={animIds()}>{(id) => <option value={id}>{animNames()?.get(id) ?? id}</option>}</For>
           </select>
         </div>
         <Show when={error()}>

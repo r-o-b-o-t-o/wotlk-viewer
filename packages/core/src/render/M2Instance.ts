@@ -1,9 +1,10 @@
 import { Bone, Camera, DetachedBindMode, Matrix4, Object3D, Skeleton, SkinnedMesh, Texture, Vector3 } from "three";
-import type { AssetManager } from "../AssetManager";
-import { M2Animator, type BillboardBasis } from "../animation/M2Animator";
-import { M2TextureType, type M2Attachment } from "../formats/m2";
-import { M2Material, TexCoordSource, type M2Lighting } from "./M2Material";
-import type { M2Model } from "./M2Model";
+import type { AssetManager } from "../AssetManager.js";
+import { M2Animator, type BillboardBasis } from "../animation/M2Animator.js";
+import { M2TextureType, type M2Attachment } from "../formats/m2.js";
+import { M2Material, TexCoordSource, type M2Lighting } from "./M2Material.js";
+import type { M2Model } from "./M2Model.js";
+import { ParticleSystem } from "./ParticleSystem.js";
 
 export interface PlayOptions {
 	loop?: boolean;
@@ -19,6 +20,11 @@ interface AttachedChild {
 const IDENTITY_BIND = new Matrix4();
 const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
+const DEFAULT_BASIS: BillboardBasis = {
+	right: new Vector3(0, -1, 0),
+	up: new Vector3(0, 0, 1),
+	back: new Vector3(1, 0, 0),
+};
 
 /**
  * A renderable, animated instance of an M2Model. Add it to a three.js scene (it uses WoW's Z-up
@@ -31,6 +37,7 @@ export class M2Instance extends Object3D {
 	/** Textures currently assigned per M2 texture index. */
 	readonly textures: (Texture | null)[];
 	readonly attached: AttachedChild[] = [];
+	readonly particles: ParticleSystem[];
 
 	private readonly skeleton: Skeleton;
 	private geosetFilter: (geosetId: number) => boolean = () => true;
@@ -79,6 +86,9 @@ export class M2Instance extends Object3D {
 		this.mesh.bind(this.skeleton, IDENTITY_BIND);
 		this.mesh.frustumCulled = false;
 		this.add(this.mesh);
+
+		this.particles = m2.particleEmitters.map((e) => new ParticleSystem(e, assets.whiteTexture));
+		for (const ps of this.particles) this.add(ps.mesh);
 		this.applyTextures();
 	}
 
@@ -122,6 +132,7 @@ export class M2Instance extends Object3D {
 				this.materials[bi].setTexture(i as 0 | 1, this.textures[ti] ?? this.assets.whiteTexture);
 			}
 		});
+		for (const ps of this.particles) ps.setTexture(this.textures[ps.emitter.texture] ?? this.assets.whiteTexture);
 	}
 
 	/** Controls which geosets (submesh ids) are drawn. */
@@ -203,6 +214,12 @@ export class M2Instance extends Object3D {
 
 		this.updateMaterials();
 
+		const boneMatrices = this.animator.boneMatrices;
+		for (const ps of this.particles) {
+			const bone = boneMatrices[ps.emitter.bone] ?? IDENTITY_BIND;
+			ps.update(dtMs / 1000, this.animator, bone, basis ?? DEFAULT_BASIS);
+		}
+
 		for (const { instance, attachment } of this.attached) {
 			const [x, y, z] = attachment.position;
 			instance.matrix.copy(this.animator.boneMatrices[attachment.bone]).multiply(tmpMat.makeTranslation(x, y, z));
@@ -240,6 +257,7 @@ export class M2Instance extends Object3D {
 	/** Releases GPU resources owned by this instance (not the shared model or cached textures). */
 	dispose(): void {
 		for (const m of this.materials) m.dispose();
+		for (const ps of this.particles) ps.dispose();
 		this.skeleton.dispose();
 		for (const { instance } of this.attached) instance.dispose();
 	}

@@ -6,6 +6,7 @@ import {
 	DoubleSide,
 	DstColorFactor,
 	FrontSide,
+	type Material,
 	Matrix4,
 	NoBlending,
 	OneFactor,
@@ -18,7 +19,7 @@ import {
 	Vector4,
 	ZeroFactor,
 } from "three";
-import { M2BlendMode, M2MaterialFlags } from "../formats/m2";
+import { M2BlendMode, M2MaterialFlags } from "../formats/m2.js";
 
 /** Where a texture layer takes its UVs from. */
 export const enum TexCoordSource {
@@ -109,6 +110,42 @@ void main() {
 }
 `;
 
+/** Alpha test threshold used by the client for a blend mode. */
+export function alphaTestFor(blendMode: number): number {
+	return blendMode === M2BlendMode.AlphaKey ? 0.5 : blendMode >= M2BlendMode.Alpha ? 1 / 255 : 0;
+}
+
+/** Configures three.js blending (and `transparent`) for an M2 blend mode. */
+export function applyM2BlendMode(mat: Material, mode: number): void {
+	const set = (src: BlendingSrcFactor, dst: BlendingDstFactor) => {
+		mat.blending = CustomBlending;
+		mat.blendEquation = AddEquation;
+		mat.blendSrc = src;
+		mat.blendDst = dst;
+		mat.blendSrcAlpha = OneFactor;
+		mat.blendDstAlpha = OneMinusSrcAlphaFactor;
+	};
+	mat.transparent = mode >= M2BlendMode.Alpha;
+	switch (mode) {
+		case M2BlendMode.Opaque:
+		case M2BlendMode.AlphaKey:
+			mat.blending = NoBlending;
+			return;
+		case M2BlendMode.Alpha:
+			return set(SrcAlphaFactor, OneMinusSrcAlphaFactor);
+		case M2BlendMode.NoAlphaAdd:
+			return set(OneFactor, OneFactor);
+		case M2BlendMode.Add:
+			return set(SrcAlphaFactor, OneFactor);
+		case M2BlendMode.Mod:
+			return set(DstColorFactor, ZeroFactor);
+		case M2BlendMode.Mod2x:
+			return set(DstColorFactor, SrcColorFactor);
+		default:
+			return set(OneFactor, OneMinusSrcAlphaFactor);
+	}
+}
+
 /** Material for one M2 render batch. Lighting is done in gamma space like the original client. */
 export class M2Material extends ShaderMaterial {
 	readonly blendMode: number;
@@ -128,9 +165,7 @@ export class M2Material extends ShaderMaterial {
 				uTexCoord1: { value: opts.texCoords[1] },
 				uTexCount: { value: opts.textureCount },
 				uColor: { value: new Vector4(1, 1, 1, 1) },
-				uAlphaTest: {
-					value: blendMode === M2BlendMode.AlphaKey ? 0.5 : blendMode >= M2BlendMode.Alpha ? 1 / 255 : 0,
-				},
+				uAlphaTest: { value: alphaTestFor(blendMode) },
 				uOpaque: { value: blendMode === M2BlendMode.Opaque },
 				uUnlit: { value: (flags & M2MaterialFlags.Unlit) !== 0 },
 				uAmbient: { value: lighting.ambient },
@@ -143,43 +178,7 @@ export class M2Material extends ShaderMaterial {
 		this.side = flags & M2MaterialFlags.TwoSided ? DoubleSide : FrontSide;
 		this.depthTest = !(flags & M2MaterialFlags.DepthTestOff);
 		this.depthWrite = !(flags & M2MaterialFlags.DepthWriteOff);
-		this.transparent = blendMode >= M2BlendMode.Alpha;
-		this.applyBlending(blendMode);
-	}
-
-	private applyBlending(mode: number): void {
-		this.blendEquation = AddEquation;
-		switch (mode) {
-			case M2BlendMode.Opaque:
-			case M2BlendMode.AlphaKey:
-				this.blending = NoBlending;
-				return;
-			case M2BlendMode.Alpha:
-				this.setBlend(SrcAlphaFactor, OneMinusSrcAlphaFactor);
-				return;
-			case M2BlendMode.NoAlphaAdd:
-				this.setBlend(OneFactor, OneFactor);
-				return;
-			case M2BlendMode.Add:
-				this.setBlend(SrcAlphaFactor, OneFactor);
-				return;
-			case M2BlendMode.Mod:
-				this.setBlend(DstColorFactor, ZeroFactor);
-				return;
-			case M2BlendMode.Mod2x:
-				this.setBlend(DstColorFactor, SrcColorFactor);
-				return;
-			default:
-				this.setBlend(OneFactor, OneMinusSrcAlphaFactor);
-		}
-	}
-
-	private setBlend(src: BlendingSrcFactor, dst: BlendingDstFactor): void {
-		this.blending = CustomBlending;
-		this.blendSrc = src;
-		this.blendDst = dst;
-		this.blendSrcAlpha = OneFactor;
-		this.blendDstAlpha = OneMinusSrcAlphaFactor;
+		applyM2BlendMode(this, blendMode);
 	}
 
 	setTexture(layer: 0 | 1, texture: Texture): void {

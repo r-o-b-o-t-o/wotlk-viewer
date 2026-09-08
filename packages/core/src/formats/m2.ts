@@ -1,4 +1,4 @@
-import { BinaryReader } from "../io/BinaryReader";
+import { BinaryReader } from "../io/BinaryReader.js";
 
 /** M2 (version 264, WotLK) model data. Only the parts needed for rendering are parsed. */
 
@@ -159,9 +159,89 @@ export interface M2Data {
 	boundingSphereRadius: number;
 	attachments: M2Attachment[];
 	attachmentLookup: Int16Array;
+	particleEmitters: M2ParticleEmitter[];
 	/** Source bytes: embedded sequence data is read from here. */
 	reader: BinaryReader;
 }
+
+/** Keyframes over a particle's lifetime; `times` are 0..1 life fractions, `comp` floats per value. */
+export interface M2PartTrack {
+	times: Float32Array;
+	values: Float32Array;
+	comp: number;
+}
+
+export interface M2ParticleEmitter {
+	id: number;
+	flags: number;
+	/** Emitter origin relative to `bone`. */
+	position: [number, number, number];
+	bone: number;
+	/** Index into the M2 texture list. */
+	texture: number;
+	blendMode: number;
+	/** 1 = plane, 2 = sphere, 3 = spline. */
+	emitterType: number;
+	particleColorIndex: number;
+	particleType: number;
+	headOrTail: number;
+	textureTileRotation: number;
+	textureRows: number;
+	textureCols: number;
+	emissionSpeed: M2Track;
+	speedVariation: M2Track;
+	verticalRange: M2Track;
+	horizontalRange: M2Track;
+	gravity: M2Track;
+	lifespan: M2Track;
+	lifespanVary: number;
+	emissionRate: M2Track;
+	emissionRateVary: number;
+	emissionAreaLength: M2Track;
+	emissionAreaWidth: M2Track;
+	zSource: M2Track;
+	alpha: M2PartTrack; // 1 comp
+	color: M2PartTrack; // 3 comps, 0..255
+	scale: M2PartTrack; // 2 comps
+	scaleVary: [number, number];
+	headCell: M2PartTrack; // 1 comp
+	tailCell: M2PartTrack; // 1 comp
+	tailLength: number;
+	twinkleSpeed: number;
+	twinklePercent: number;
+	twinkleScale: [number, number];
+	burstMultiplier: number;
+	drag: number;
+	baseSpin: number;
+	baseSpinVary: number;
+	spin: number;
+	spinVary: number;
+	tumbleMin: [number, number, number];
+	tumbleMax: [number, number, number];
+	windVector: [number, number, number];
+	windTime: number;
+	followSpeed1: number;
+	followScale1: number;
+	followSpeed2: number;
+	followScale2: number;
+	enabledIn: M2Track; // uint8
+}
+
+export const M2ParticleFlags = {
+	Lit: 0x1,
+	WorldUp: 0x8,
+	DoNotTrail: 0x10,
+	Unlit: 0x20,
+	UseBurstMultiplier: 0x40,
+	ModelSpace: 0x80,
+	RandomizedSpawn: 0x200,
+	Pinned: 0x400,
+	XyQuad: 0x1000,
+	ClampToGround: 0x2000,
+	RandomTexture: 0x10000,
+	Outward: 0x20000,
+	RandomFlipbookStart: 0x200000,
+} as const;
 
 const readArray = (r: BinaryReader): M2Array => ({ count: r.u32(), offset: r.u32() });
 
@@ -185,6 +265,131 @@ function readArrayOfArrays(r: BinaryReader, a: M2Array): M2Array[] {
 	}
 	return out;
 }
+
+/** Reads a particle "FBlock": fixed16 life-fraction times plus values of `comp` components. */
+function readPartTrack(r: BinaryReader, comp: number, kind: "fixed16" | "float" | "u16"): M2PartTrack {
+	const ts = readArray(r);
+	const vs = readArray(r);
+	const times = new Float32Array(ts.count);
+	for (let i = 0; i < ts.count; i++) times[i] = r.i16At(ts.offset + i * 2) / 32767;
+	const n = vs.count * comp;
+	let values: Float32Array;
+	if (kind === "float") values = r.f32ArrayAt(vs.offset, n);
+	else {
+		values = new Float32Array(n);
+		for (let i = 0; i < n; i++)
+			values[i] = kind === "u16" ? r.u16At(vs.offset + i * 2) : r.i16At(vs.offset + i * 2) / 32767;
+	}
+	return { times, values, comp };
+}
+
+// 476 bytes in version 264.
+const readParticle = (r: BinaryReader): M2ParticleEmitter => {
+	const id = r.u32();
+	const flags = r.u32();
+	const position = r.vec3();
+	const bone = r.u16();
+	const texture = r.u16();
+	r.skip(16); // geometry / recursion model file names
+	const blendMode = r.u8();
+	const emitterType = r.u8();
+	const particleColorIndex = r.u16();
+	const particleType = r.u8();
+	const headOrTail = r.u8();
+	const textureTileRotation = r.i16();
+	const textureRows = r.u16();
+	const textureCols = r.u16();
+	const emissionSpeed = readTrack(r);
+	const speedVariation = readTrack(r);
+	const verticalRange = readTrack(r);
+	const horizontalRange = readTrack(r);
+	const gravity = readTrack(r);
+	const lifespan = readTrack(r);
+	const lifespanVary = r.f32();
+	const emissionRate = readTrack(r);
+	const emissionRateVary = r.f32();
+	const emissionAreaLength = readTrack(r);
+	const emissionAreaWidth = readTrack(r);
+	const zSource = readTrack(r);
+	const color = readPartTrack(r, 3, "float");
+	const alpha = readPartTrack(r, 1, "fixed16");
+	const scale = readPartTrack(r, 2, "float");
+	const scaleVary: [number, number] = [r.f32(), r.f32()];
+	const headCell = readPartTrack(r, 1, "u16");
+	const tailCell = readPartTrack(r, 1, "u16");
+	const tailLength = r.f32();
+	const twinkleSpeed = r.f32();
+	const twinklePercent = r.f32();
+	const twinkleScale: [number, number] = [r.f32(), r.f32()];
+	const burstMultiplier = r.f32();
+	const drag = r.f32();
+	const baseSpin = r.f32();
+	const baseSpinVary = r.f32();
+	const spin = r.f32();
+	const spinVary = r.f32();
+	const tumbleMin = r.vec3();
+	const tumbleMax = r.vec3();
+	const windVector = r.vec3();
+	const windTime = r.f32();
+	const followSpeed1 = r.f32();
+	const followScale1 = r.f32();
+	const followSpeed2 = r.f32();
+	const followScale2 = r.f32();
+	r.skip(8); // spline points
+	const enabledIn = readTrack(r);
+	return {
+		id,
+		flags,
+		position,
+		bone,
+		texture,
+		blendMode,
+		emitterType,
+		particleColorIndex,
+		particleType,
+		headOrTail,
+		textureTileRotation,
+		textureRows,
+		textureCols,
+		emissionSpeed,
+		speedVariation,
+		verticalRange,
+		horizontalRange,
+		gravity,
+		lifespan,
+		lifespanVary,
+		emissionRate,
+		emissionRateVary,
+		emissionAreaLength,
+		emissionAreaWidth,
+		zSource,
+		alpha,
+		color,
+		scale,
+		scaleVary,
+		headCell,
+		tailCell,
+		tailLength,
+		twinkleSpeed,
+		twinklePercent,
+		twinkleScale,
+		burstMultiplier,
+		drag,
+		baseSpin,
+		baseSpinVary,
+		spin,
+		spinVary,
+		tumbleMin,
+		tumbleMax,
+		windVector,
+		windTime,
+		followSpeed1,
+		followScale1,
+		followSpeed2,
+		followScale2,
+		enabledIn,
+	};
+};
 
 function readList<T>(r: BinaryReader, a: M2Array, size: number, read: (r: BinaryReader) => T): T[] {
 	const out: T[] = new Array(a.count);
@@ -284,7 +489,8 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 	r.skip(24 + 4 + 8 * 3); // collision box, radius, collision arrays
 	const attachments = readArray(r);
 	const attachmentLookup = readArray(r);
-	// events, lights, cameras, camera lookup, ribbons, particles: unused
+	r.skip(8 * 5); // events, lights, cameras, camera lookup, ribbons: unused
+	const particles = readArray(r);
 
 	const i16 = (a: M2Array) => r.i16ArrayAt(a.offset, a.count);
 	const u16 = (a: M2Array) => r.u16ArrayAt(a.offset, a.count);
@@ -329,6 +535,7 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 			return { id, bone, position, animateAttached: readTrack(r) };
 		}),
 		attachmentLookup: i16(attachmentLookup),
+		particleEmitters: readList(r, particles, 476, readParticle),
 		reader: r,
 	};
 }

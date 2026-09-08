@@ -10,6 +10,8 @@ import {
 	type M2Instance,
 } from "@wotlk-viewer/core";
 import { Character, Creature, Model, WowViewer } from "@wotlk-viewer/solid";
+// Type-only, so the server package is erased from the browser bundle.
+import type { CharacterDetails, CharacterSummary } from "@wotlk-viewer/server";
 
 const assets = new AssetManager(new HttpDataSource("/data"));
 const gameData = new GameData(assets);
@@ -40,22 +42,6 @@ const MODELS = [
 
 type Mode = "character" | "model" | "creature";
 
-/** Shape returned by the dev server's character API. */
-interface DbCharacter {
-	guid: number;
-	name: string;
-	race: number;
-	class: number;
-	gender: number;
-	level: number;
-	skin: number;
-	face: number;
-	hairStyle: number;
-	hairColor: number;
-	facialStyle: number;
-	equipment: { slot: number; itemEntry: number }[];
-}
-
 export function App(): JSX.Element {
 	const [mode, setMode] = createSignal<Mode>("character");
 	const [displayId, setDisplayId] = createSignal(188); // blue murloc
@@ -82,24 +68,21 @@ export function App(): JSX.Element {
 	const [races] = createResource(() => gameData.races());
 	const [animNames] = createResource(() => gameData.animationNames());
 
-	let animSelect!: HTMLSelectElement;
-	// Sync the select after its options are (re)rendered; a plain `value` prop is applied before they exist.
+	// A model may not have the animation the previous one was playing.
 	createEffect(
-		on([animIds, animNames, animation], () =>
-			queueMicrotask(() => {
-				animSelect.value = String(animation());
-			}),
-		),
+		on(animIds, (ids) => {
+			if (ids.length > 0 && !ids.includes(animation())) setAnimation(ids[0]);
+		}),
 	);
 	const [options] = createResource(
 		() => [appearance.race, appearance.gender] as const,
 		([race, gender]) => gameData.customizationOptions(race, gender),
 	);
 	const [results] = createResource(search, async (name) => {
-		if (name.length < 2) return [] as DbCharacter[];
+		if (name.length < 2) return [] as CharacterSummary[];
 		return (await (
 			await fetch(`/api/characters?name=${encodeURIComponent(name)}&limit=30`)
-		).json()) as DbCharacter[];
+		).json()) as CharacterSummary[];
 	});
 
 	const loadCharacter = async (guid: number) => {
@@ -111,7 +94,7 @@ export function App(): JSX.Element {
 			setError(`Failed to load character ${guid}: ${res.status}`);
 			return;
 		}
-		const c = (await res.json()) as DbCharacter;
+		const c = (await res.json()) as CharacterDetails;
 		setAppearance({
 			race: c.race,
 			gender: c.gender,
@@ -320,8 +303,14 @@ export function App(): JSX.Element {
 				<h2>Animation</h2>
 				<div class="row">
 					<label>Animation</label>
-					<select ref={animSelect} onChange={(e) => setAnimation(Number(e.currentTarget.value))}>
-						<For each={animIds()}>{(id) => <option value={id}>{animNames()?.get(id) ?? id}</option>}</For>
+					<select value={animation()} onChange={(e) => setAnimation(Number(e.currentTarget.value))}>
+						<For each={animIds()}>
+							{(id) => (
+								<option value={id} selected={id === animation()}>
+									{animNames()?.get(id) ?? id}
+								</option>
+							)}
+						</For>
 					</select>
 				</div>
 				<Show when={error()}>
@@ -330,7 +319,7 @@ export function App(): JSX.Element {
 			</aside>
 			<main class="viewport">
 				{/* `window.viewer` is exposed for poking at the scene from the devtools console. */}
-				<WowViewer assets={assets} ref={(v) => ((window as unknown as { viewer: unknown }).viewer = v)}>
+				<WowViewer ref={(v) => ((window as unknown as { viewer: unknown }).viewer = v)}>
 					<Show when={mode() === "character"}>
 						<Character
 							assets={assets}

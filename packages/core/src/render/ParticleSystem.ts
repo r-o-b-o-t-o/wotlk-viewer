@@ -11,6 +11,7 @@ import {
 } from "three";
 import type { M2Animator, BillboardBasis } from "../animation/M2Animator.js";
 import { M2ParticleFlags, type M2ParticleEmitter, type M2PartTrack } from "../formats/m2.js";
+import { sampleTrack } from "../animation/tracks.js";
 import { alphaTestFor, applyM2BlendMode } from "./M2Material.js";
 
 const VERTEX = /* glsl */ `
@@ -46,27 +47,13 @@ const tmpDir = new Vector3();
 const tmpRight = new Vector3();
 const tmpUp = new Vector3();
 
-/** Samples a life-fraction keyed track (linear). */
+/** Samples a life-fraction keyed track, falling back to a constant when it has no keys. */
 function samplePart(track: M2PartTrack, t: number, out: Float32Array, fallback: number): void {
-	const { times, values, comp } = track;
-	const n = times.length;
-	if (n === 0) {
-		out.fill(fallback, 0, comp);
+	if (track.times.length === 0) {
+		out.fill(fallback, 0, track.comp);
 		return;
 	}
-	if (n === 1 || t <= times[0]) {
-		for (let i = 0; i < comp; i++) out[i] = values[i];
-		return;
-	}
-	if (t >= times[n - 1]) {
-		for (let i = 0; i < comp; i++) out[i] = values[(n - 1) * comp + i];
-		return;
-	}
-	let k = 0;
-	while (k < n - 2 && times[k + 1] <= t) k++;
-	const f = (t - times[k]) / (times[k + 1] - times[k] || 1);
-	for (let i = 0; i < comp; i++)
-		out[i] = values[k * comp + i] + (values[(k + 1) * comp + i] - values[k * comp + i]) * f;
+	sampleTrack(track, t, out);
 }
 
 /**

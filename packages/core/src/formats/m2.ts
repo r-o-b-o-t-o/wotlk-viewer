@@ -164,11 +164,16 @@ export interface M2Data {
 	reader: BinaryReader;
 }
 
-/** Keyframes over a particle's lifetime; `times` are 0..1 life fractions, `comp` floats per value. */
+/**
+ * Keyframes over a particle's lifetime; `times` are 0..1 life fractions, `comp` floats per value.
+ * Shaped like `TrackKeys` so the shared sampler can read it.
+ */
 export interface M2PartTrack {
 	times: Float32Array;
 	values: Float32Array;
 	comp: number;
+	/** Always linear. */
+	interpolation: number;
 }
 
 export interface M2ParticleEmitter {
@@ -280,7 +285,7 @@ function readPartTrack(r: BinaryReader, comp: number, kind: "fixed16" | "float" 
 		for (let i = 0; i < n; i++)
 			values[i] = kind === "u16" ? r.u16At(vs.offset + i * 2) : r.i16At(vs.offset + i * 2) / 32767;
 	}
-	return { times, values, comp };
+	return { times, values, comp, interpolation: 1 };
 }
 
 // 476 bytes in version 264.

@@ -5,7 +5,8 @@ export type TrackKind = "vec3" | "quat" | "compquat" | "fixed16" | "float" | "u8
 
 /** Decoded keyframes of one track for one sequence. */
 export interface TrackKeys {
-	times: Uint32Array;
+	/** Milliseconds for animation tracks, 0..1 life fractions for particle tracks. */
+	times: ArrayLike<number>;
 	/** `comp` floats per value; hermite/bezier tracks store 3 values (value, in, out) per key. */
 	values: Float32Array;
 	comp: number;

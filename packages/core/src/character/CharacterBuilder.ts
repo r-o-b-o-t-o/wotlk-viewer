@@ -1,9 +1,9 @@
-import type { AssetManager } from "../AssetManager";
-import type { BlpImage } from "../formats/blp";
-import { M2TextureType } from "../formats/m2";
-import { M2Instance } from "../render/M2Instance";
-import type { M2Lighting } from "../render/M2Material";
-import { canvasToTexture } from "../render/textures";
+import type { AssetManager } from "../AssetManager.js";
+import type { BlpImage } from "../formats/blp.js";
+import { M2TextureType } from "../formats/m2.js";
+import { M2Instance } from "../render/M2Instance.js";
+import type { M2Lighting } from "../render/M2Material.js";
+import { canvasToTexture } from "../render/textures.js";
 import {
 	AttachmentId,
 	CharRegion,
@@ -13,9 +13,9 @@ import {
 	GeosetGroup,
 	InventoryType,
 	ITEM_TEXTURE_SLOTS,
-} from "./constants";
-import type { GameData, ItemDisplayInfo } from "./GameData";
-import { TextureCompositor } from "./TextureCompositor";
+} from "./constants.js";
+import type { GameData, ItemDisplayInfo } from "./GameData.js";
+import { TextureCompositor } from "./TextureCompositor.js";
 
 export interface CharacterItem {
 	slot: EquipmentSlot;
@@ -40,13 +40,40 @@ export interface CharacterAppearance {
 	items?: CharacterItem[];
 	showHelm?: boolean;
 	showCloak?: boolean;
+	/** Carry main/off-hand weapons on the back or hips instead of in the hands. */
+	sheathed?: boolean;
 }
 
 interface ResolvedItem {
 	slot: EquipmentSlot;
 	display: ItemDisplayInfo;
 	inventoryType: InventoryType;
+	/** Item.dbc SheatheType (0 = none). */
+	sheatheType: number;
 }
+
+/** Body regions (ITEM_TEXTURE_SLOTS indices) an item slot is allowed to paint; robes add the leg regions. */
+const SLOT_TEXTURE_REGIONS: Partial<Record<EquipmentSlot, number[]>> = {
+	[EquipmentSlot.Shirt]: [0, 1, 3, 4],
+	[EquipmentSlot.Chest]: [0, 1, 3, 4],
+	[EquipmentSlot.Waist]: [4, 5],
+	[EquipmentSlot.Legs]: [5, 6],
+	[EquipmentSlot.Feet]: [6, 7],
+	[EquipmentSlot.Wrists]: [1],
+	[EquipmentSlot.Hands]: [1, 2],
+	[EquipmentSlot.Tabard]: [3, 4],
+};
+
+/** Item.dbc SheatheType -> attachment point when the weapon is put away. */
+const SHEATH_ATTACHMENTS: Record<number, AttachmentId> = {
+	1: AttachmentId.SheathMainHand,
+	2: AttachmentId.SheathOffHand,
+	3: AttachmentId.LargeWeaponLeft,
+	4: AttachmentId.LargeWeaponRight,
+	5: AttachmentId.HipWeaponLeft,
+	6: AttachmentId.HipWeaponRight,
+	7: AttachmentId.SheathShield,
+};
 
 /** Body texture draw order (later slots draw on top). */
 const SLOT_ORDER = [
@@ -124,7 +151,8 @@ export class CharacterBuilder {
 		for (let g = 1; g <= 18; g++) groups.set(g, 1);
 		groups.set(GeosetGroup.Ears, 2);
 		const hair = await this.data.findHairGeoset(race, sex, app.hairStyle ?? 0);
-		groups.set(GeosetGroup.Hair, hair?.geoset ?? 1);
+		// Geoset 1 is the bald scalp cap; bald styles reference geoset 0.
+		groups.set(GeosetGroup.Hair, hair?.geoset || 1);
 		const facial = await this.data.findFacialHairStyle(race, sex, app.facialStyle ?? 0);
 		const fg = facial?.geosets ?? [0, 0, 0, 0, 0];
 		groups.set(GeosetGroup.Facial1, fg[0]);
@@ -175,7 +203,7 @@ export class CharacterBuilder {
 				const bit = 1 << (race - 1);
 				const hides = (i: number) => (vis.hideGeoset[i] & bit) !== 0;
 				if (hides(0)) {
-					groups.set(GeosetGroup.Hair, 0);
+					groups.set(GeosetGroup.Hair, 1);
 					hideHair = true;
 				}
 				if (hides(1)) groups.set(GeosetGroup.Facial1, 0);
@@ -220,8 +248,11 @@ export class CharacterBuilder {
 			(hasRobe ? SLOT_ORDER_ROBE : SLOT_ORDER).flatMap((slot) => {
 				const item = bySlot.get(slot);
 				if (!item) return [];
+				// ItemDisplayInfo carries textures for the whole armor set; only the slot's own regions apply.
+				const allowed = [...(SLOT_TEXTURE_REGIONS[slot] ?? [])];
+				if (slot === EquipmentSlot.Chest && hasRobe) allowed.push(5, 6);
 				return ITEM_TEXTURE_SLOTS.flatMap(({ folder, region }, i) => {
-					const name = item.display.textures[i];
+					const name = allowed.includes(i) ? item.display.textures[i] : "";
 					return name
 						? [this.resolveItemTexture(folder, name, genderSuffix).then((path) => ({ path, region }))]
 						: [];
@@ -288,19 +319,30 @@ export class CharacterBuilder {
 					),
 				);
 		}
+		const usedSheaths = new Set<AttachmentId>();
 		for (const slot of [EquipmentSlot.MainHand, EquipmentSlot.OffHand, EquipmentSlot.Ranged]) {
 			const item = bySlot.get(slot);
 			if (!item?.display.leftModel) continue;
 			const isShield = item.inventoryType === InventoryType.Shield;
 			const folder = isShield ? "Shield" : "Weapon";
-			const attachment =
-				slot === EquipmentSlot.MainHand
-					? AttachmentId.HandRight
-					: slot === EquipmentSlot.OffHand
-						? isShield
+			let attachment: AttachmentId;
+			if (slot === EquipmentSlot.Ranged) {
+				// Ranged weapons always hang on the back, next to a sheathed two-hander if any.
+				attachment = usedSheaths.has(AttachmentId.SheathMainHand)
+					? AttachmentId.SheathOffHand
+					: AttachmentId.SheathMainHand;
+			} else if (app.sheathed) {
+				if (item.inventoryType === InventoryType.Holdable) continue; // held items vanish when sheathed
+				attachment = sheathAttachment(item, slot === EquipmentSlot.OffHand);
+			} else {
+				attachment =
+					slot === EquipmentSlot.MainHand
+						? AttachmentId.HandRight
+						: isShield
 							? AttachmentId.Shield
-							: AttachmentId.HandLeft
-						: AttachmentId.Back;
+							: AttachmentId.HandLeft;
+			}
+			usedSheaths.add(attachment);
 			attachments.push(
 				this.attachItem(
 					body,
@@ -331,7 +373,7 @@ export class CharacterBuilder {
 				if (await this.assets.fileExists(`Item\\ObjectComponents\\Shield\\${stripExt(display.leftModel)}.m2`))
 					inventoryType = InventoryType.Shield;
 			}
-			out.push({ slot: it.slot, display, inventoryType });
+			out.push({ slot: it.slot, display, inventoryType, sheatheType: rec?.sheatheType ?? 0 });
 		}
 		return out;
 	}
@@ -380,4 +422,16 @@ export class CharacterBuilder {
 
 function stripExt(name: string): string {
 	return name.replace(/\.(mdx|mdl|m2)$/i, "");
+}
+
+/** Attachment for a put-away weapon; off-hand copies of "left" sheath types use the right-hand variant. */
+function sheathAttachment(item: ResolvedItem, offHand: boolean): AttachmentId {
+	if (item.inventoryType === InventoryType.Shield) return AttachmentId.SheathShield;
+	const a = SHEATH_ATTACHMENTS[item.sheatheType];
+	if (a === undefined) return offHand ? AttachmentId.SheathOffHand : AttachmentId.SheathMainHand;
+	if (!offHand) return a;
+	if (a === AttachmentId.LargeWeaponLeft) return AttachmentId.LargeWeaponRight;
+	if (a === AttachmentId.HipWeaponLeft) return AttachmentId.HipWeaponRight;
+	if (a === AttachmentId.SheathMainHand) return AttachmentId.SheathOffHand;
+	return a;
 }

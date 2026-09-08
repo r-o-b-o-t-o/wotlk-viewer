@@ -284,6 +284,14 @@ export function App(): JSX.Element {
 							/>{" "}
 							Cloak
 						</label>
+						<label>
+							<input
+								type="checkbox"
+								checked={appearance.sheathed}
+								onChange={(e) => setAppearance("sheathed", e.currentTarget.checked)}
+							/>{" "}
+							Sheathed
+						</label>
 					</div>
 
 					<h2>Equipment (item entries)</h2>

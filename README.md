@@ -139,12 +139,15 @@ quaternion and scale tracks, global sequences, external `.anim` files loaded on 
 
 Things deliberately left out or approximated; worth deciding on if they matter for your use case:
 
-- Particle and ribbon emitters are not rendered (spell effects, some weapon and helm glows).
+- Particle emitters use a simplified CPU simulation: camera-facing quads only (no tails, spin, tumble, wind or
+  spline emitters) and no `ParticleColor.dbc` overrides. Ribbon emitters are not rendered.
 - Enchant visuals (`ItemVisuals.dbc`) are not shown.
-- Weapons are always held; ranged weapons sit on the `Back` attachment. No sheathing.
+- Ranged weapons always hang on the back (`SheathMainHand`, or `SheathOffHand` when a sheathed two-hander already
+  uses it). `sheathed: true` moves main/off-hand weapons to the sheath attachments derived from `Item.dbc`
+  `SheatheType`; held off-hand items disappear when sheathed, like in the game.
 - Two-texture batches always use a multiply combiner and pre-Cataclysm shader ids are not decoded, so additive
   detail layers can look slightly off. Batches with more than two textures use the first two.
-- Cylindrical billboards are treated as spherical; bezier tracks are treated as hermite.
+- Bezier tracks are treated as hermite.
 - Sequence switching is instant (no `blendTime` cross-fade) and Stand variations are not randomized (always variation 0
   unless you pass one).
 - Only skin profile `00` (highest detail) is loaded.
@@ -154,6 +157,8 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Geoset defaults: ears = 702, every other group = 1. Tail/loincloth groups (6, 14) were not verified beyond a visual
   check of Tauren and Draenei. Death knight eye glow is enabled from `classId === 6` (geoset 1703).
 - Robes reset kneepads to 901 and take the trouser geoset from the chest; the boot geoset is left as-is.
+- Item region textures are filtered per slot (e.g. gloves paint only hands and forearms) since `ItemDisplayInfo`
+  rows carry the whole armor set; the robe rule adds the leg regions to chest pieces.
 - The attachment `animateAttached` visibility track is ignored.
 - Single directional light plus ambient; no fog or shadows. `Viewer` sets `outputColorSpace = LinearSRGBColorSpace`
   because shading is done in gamma space; mixing in standard three.js materials needs color-management care.

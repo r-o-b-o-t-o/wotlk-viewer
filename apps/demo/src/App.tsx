@@ -105,7 +105,13 @@ export function App(): JSX.Element {
 	const loadCharacter = async (guid: number) => {
 		setSelectedGuid(guid);
 		setStatus("Loading character…");
-		const c = (await (await fetch(`/api/characters/${guid}`)).json()) as DbCharacter;
+		const res = await fetch(`/api/characters/${guid}`);
+		if (!res.ok) {
+			setStatus("");
+			setError(`Failed to load character ${guid}: ${res.status}`);
+			return;
+		}
+		const c = (await res.json()) as DbCharacter;
 		setAppearance({
 			race: c.race,
 			gender: c.gender,
@@ -204,7 +210,7 @@ export function App(): JSX.Element {
 								{(c) => (
 									<div
 										classList={{ active: selectedGuid() === c.guid }}
-										onClick={() => void loadCharacter(c.guid)}
+										onClick={() => void loadCharacter(c.guid).catch(onError)}
 									>
 										<span>{c.name}</span>
 										<span>

@@ -24,7 +24,14 @@ export interface EquippedItem {
 	itemEntry: number;
 	/** Permanent enchant id, if any. */
 	enchant: number;
+	/** mod-transmog appearance to show instead, when the module is installed and one is applied. */
+	transmogEntry?: number;
+	/** mod-transmog hides this slot's appearance. */
+	transmogHidden?: boolean;
 }
+
+/** mod-transmog stores this entry to mean "hide this item" rather than an appearance. */
+const TRANSMOG_HIDDEN = 1;
 
 export interface CharacterDetails extends CharacterSummary {
 	skin: number;
@@ -38,6 +45,7 @@ export interface CharacterDetails extends CharacterSummary {
 /** Read-only access to player characters and their equipped items. */
 export class CharacterDb {
 	private readonly pool: Pool;
+	private transmog: Promise<boolean> | null = null;
 
 	constructor(opts: DbOptions) {
 		this.pool = mysql.createPool({
@@ -65,9 +73,11 @@ export class CharacterDb {
 		);
 		const c = rows[0];
 		if (!c) return null;
+		const transmog = await this.hasTransmog();
 		const [items] = await this.pool.query<RowDataPacket[]>(
-			`SELECT ci.slot, ii.itemEntry, ii.enchantments
+			`SELECT ci.slot, ii.itemEntry, ii.enchantments${transmog ? ", ct.FakeEntry" : ""}
        FROM character_inventory ci JOIN item_instance ii ON ii.guid = ci.item
+       ${transmog ? "LEFT JOIN custom_transmogrification ct ON ct.GUID = ci.item" : ""}
        WHERE ci.guid = ? AND ci.bag = 0 AND ci.slot < 19 ORDER BY ci.slot`,
 			[guid],
 		);
@@ -78,13 +88,32 @@ export class CharacterDb {
 			hairStyle: c.hairStyle,
 			hairColor: c.hairColor,
 			facialStyle: c.facialStyle,
-			equipment: items.map((i) => ({
-				slot: i.slot,
-				itemEntry: i.itemEntry,
-				// "id duration charges" triplets; slot 0 is the permanent enchant.
-				enchant: Number(String(i.enchantments ?? "").split(" ")[0]) || 0,
-			})),
+			equipment: items.map((i) => {
+				const fake = Number(i.FakeEntry) || 0;
+				return {
+					slot: i.slot,
+					itemEntry: i.itemEntry,
+					// "id duration charges" triplets; slot 0 is the permanent enchant.
+					enchant: Number(String(i.enchantments ?? "").split(" ")[0]) || 0,
+					transmogEntry: fake > TRANSMOG_HIDDEN ? fake : undefined,
+					transmogHidden: fake === TRANSMOG_HIDDEN || undefined,
+				};
+			}),
 		};
+	}
+
+	/** mod-transmog is optional, so probe its table once and remember the answer. */
+	private hasTransmog(): Promise<boolean> {
+		return (this.transmog ??= this.pool
+			.query<RowDataPacket[]>(
+				`SELECT 1 FROM information_schema.tables
+         WHERE table_schema = DATABASE() AND table_name = 'custom_transmogrification' LIMIT 1`,
+			)
+			.then(([rows]) => rows.length > 0)
+			.catch((e) => {
+				console.warn(`Could not check for mod-transmog: ${e instanceof Error ? e.message : e}`);
+				return false;
+			}));
 	}
 
 	close(): Promise<void> {

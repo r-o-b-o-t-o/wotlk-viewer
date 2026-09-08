@@ -23,6 +23,11 @@ export interface CharacterItem {
 	displayId?: number;
 	/** Item entry (item_template id). */
 	itemEntry?: number;
+	/**
+	 * Item entry to take the appearance from instead (a transmog). Entries the client does not know
+	 * are ignored, so server-side placeholders fall back to the real item.
+	 */
+	transmogEntry?: number;
 	/** Needed to tell robes, shields, etc. apart when only `displayId` is given. */
 	inventoryType?: InventoryType;
 }
@@ -362,7 +367,9 @@ export class CharacterBuilder {
 		const out: ResolvedItem[] = [];
 		for (const it of items) {
 			const rec = it.itemEntry !== undefined ? itemTable.get(it.itemEntry) : undefined;
-			const displayId = it.displayId ?? rec?.displayId;
+			// The transmog only supplies the look; an entry the client does not know is no transmog at all.
+			const look = (it.transmogEntry !== undefined ? itemTable.get(it.transmogEntry) : undefined) ?? rec;
+			const displayId = it.displayId ?? look?.displayId;
 			if (!displayId) continue;
 			const display = displays.get(displayId);
 			if (!display) continue;
@@ -373,7 +380,8 @@ export class CharacterBuilder {
 				if (await this.assets.fileExists(objectComponentPath("Shield", display.leftModel, "m2")))
 					inventoryType = InventoryType.Shield;
 			}
-			out.push({ slot: it.slot, display, inventoryType, sheatheType: rec?.sheatheType ?? 0 });
+			// How it is carried follows the model on show, not the item underneath.
+			out.push({ slot: it.slot, display, inventoryType, sheatheType: look?.sheatheType ?? 0 });
 		}
 		return out;
 	}

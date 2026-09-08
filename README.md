@@ -115,7 +115,10 @@ Endpoints:
   200/204 without a body (used for cheap existence probes).
 - `GET /api/characters?name=<prefix>&limit=20` — `{ guid, name, race, class, gender, level }[]`
 - `GET /api/characters/<guid>` — the above plus `skin, face, hairStyle, hairColor, facialStyle` and
-  `equipment: { slot, itemEntry, enchant }[]` (from `character_inventory` + `item_instance`).
+  `equipment: { slot, itemEntry, enchant, transmogEntry?, transmogHidden? }[]` (from `character_inventory` +
+  `item_instance`). Both transmog fields come from mod-transmog's `custom_transmogrification` table, whose
+  entry 1 means "hidden" rather than an appearance; the module is optional, so the server probes for that
+  table once and omits the fields when it is absent. Drop the items flagged `transmogHidden` before building.
 
 Any other backend works as long as it implements `DataSource` (`readFile`, optional `exists`).
 
@@ -164,7 +167,8 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Single directional light plus ambient; no fog or shadows. `Viewer` sets `outputColorSpace = LinearSRGBColorSpace`
   because shading is done in gamma space; mixing in standard three.js materials needs color-management care.
 - DBC tables are assumed to use 4-byte fields (true for every 3.3.5a table read here). Little-endian host assumed.
-- Items whose entry is missing from the client's `Item.dbc` (custom server items) are skipped.
+- Items whose entry is missing from the client's `Item.dbc` (custom server items) are skipped, and a
+  `transmogEntry` the client does not know counts as no transmog, falling back to the real item.
 - `HttpDataSource.exists` sends a HEAD with `?exists`, which @wotlk-viewer/server answers 200/204 to keep missing
   files out of the browser console; any other backend just needs to answer 200 for a file that exists.
 - Decoded textures are held twice while a model is on screen: three.js keeps the pixels on `DataTexture.image.data`

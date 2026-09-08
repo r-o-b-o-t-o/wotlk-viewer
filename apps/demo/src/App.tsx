@@ -64,6 +64,8 @@ export function App(): JSX.Element {
 	const [error, setError] = createSignal("");
 	const [search, setSearch] = createSignal("");
 	const [selectedGuid, setSelectedGuid] = createSignal<number | null>(null);
+	const [dbCharacter, setDbCharacter] = createSignal<CharacterDetails | null>(null);
+	const [showTransmog, setShowTransmog] = createSignal(true);
 
 	const [races] = createResource(() => gameData.races());
 	const [animNames] = createResource(() => gameData.animationNames());
@@ -95,6 +97,13 @@ export function App(): JSX.Element {
 			return;
 		}
 		const c = (await res.json()) as CharacterDetails;
+		setDbCharacter(c);
+		applyCharacter(c, showTransmog());
+		setMode("character");
+	};
+
+	/** One store write per change, so the character is rebuilt once. */
+	const applyCharacter = (c: CharacterDetails, transmog: boolean) =>
 		setAppearance({
 			race: c.race,
 			gender: c.gender,
@@ -104,9 +113,19 @@ export function App(): JSX.Element {
 			hairStyle: c.hairStyle,
 			hairColor: c.hairColor,
 			facialStyle: c.facialStyle,
-			items: c.equipment.map((e) => ({ slot: e.slot, itemEntry: e.itemEntry })),
+			items: c.equipment
+				.filter((e) => !(transmog && e.transmogHidden))
+				.map((e) => ({
+					slot: e.slot,
+					itemEntry: e.itemEntry,
+					transmogEntry: transmog ? e.transmogEntry : undefined,
+				})),
 		});
-		setMode("character");
+
+	const toggleTransmog = (on: boolean) => {
+		setShowTransmog(on);
+		const c = dbCharacter();
+		if (c) applyCharacter(c, on);
 	};
 
 	const itemEntry = (slot: EquipmentSlot) => appearance.items?.find((i) => i.slot === slot)?.itemEntry ?? "";
@@ -288,6 +307,14 @@ export function App(): JSX.Element {
 								onChange={(e) => setAppearance("drawRanged", e.currentTarget.checked)}
 							/>{" "}
 							Ranged
+						</label>
+						<label>
+							<input
+								type="checkbox"
+								checked={showTransmog()}
+								onChange={(e) => toggleTransmog(e.currentTarget.checked)}
+							/>{" "}
+							Transmog
 						</label>
 					</div>
 

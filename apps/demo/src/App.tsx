@@ -3,7 +3,7 @@ import { createStore } from 'solid-js/store';
 import {
   AssetManager, EquipmentSlot, GameData, HttpDataSource, type CharacterAppearance, type CharacterItem, type M2Instance,
 } from '@wotlk-viewer/core';
-import { Character, Model, WowViewer } from '@wotlk-viewer/solid';
+import { Character, Creature, Model, WowViewer } from '@wotlk-viewer/solid';
 
 const assets = new AssetManager(new HttpDataSource('/data'));
 const gameData = new GameData(assets);
@@ -23,6 +23,8 @@ const MODELS = [
   'Item\\ObjectComponents\\Weapon\\Sword_1H_Ashbringer_D_01.m2',
 ];
 
+type Mode = 'character' | 'model' | 'creature';
+
 /** Shape returned by the dev server's character API. */
 interface DbCharacter {
   guid: number; name: string; race: number; class: number; gender: number; level: number;
@@ -31,7 +33,8 @@ interface DbCharacter {
 }
 
 export function App(): JSX.Element {
-  const [mode, setMode] = createSignal<'character' | 'model'>('character');
+  const [mode, setMode] = createSignal<Mode>('character');
+  const [displayId, setDisplayId] = createSignal(188); // blue murloc
   const [appearance, setAppearance] = createStore<CharacterAppearance>({
     race: 1, gender: 0, skin: 0, face: 0, hairStyle: 0, hairColor: 0, facialStyle: 0, items: [], showHelm: true, showCloak: true,
   });
@@ -100,11 +103,19 @@ export function App(): JSX.Element {
         <h1>WotLK 3D Viewer</h1>
         <div class="row">
           <label>Mode</label>
-          <select value={mode()} onChange={(e) => setMode(e.currentTarget.value as 'character' | 'model')}>
+          <select value={mode()} onChange={(e) => setMode(e.currentTarget.value as Mode)}>
             <option value="character">Character</option>
+            <option value="creature">Creature (display id)</option>
             <option value="model">Model file</option>
           </select>
         </div>
+
+        <Show when={mode() === 'creature'}>
+          <div class="row">
+            <label>Display id</label>
+            <input type="number" value={displayId()} onChange={(e) => setDisplayId(Number(e.currentTarget.value))} />
+          </div>
+        </Show>
 
         <Show when={mode() === 'model'}>
           <div class="row">
@@ -176,7 +187,7 @@ export function App(): JSX.Element {
         <div class="row">
           <label>Animation</label>
           <select value={animation()} onChange={(e) => setAnimation(Number(e.currentTarget.value))}>
-            <For each={animIds()}>{(id) => <option value={id}>{animNames()?.get(id) ?? id}</option>}</For>
+            <For each={animIds()}>{(id) => <option value={id} selected={id === animation()}>{animNames()?.get(id) ?? id}</option>}</For>
           </select>
         </div>
         <Show when={error()}>
@@ -184,9 +195,16 @@ export function App(): JSX.Element {
         </Show>
       </aside>
       <main class="viewport">
-        <WowViewer assets={assets}>
-          <Show when={mode() === 'character'} fallback={<Model assets={assets} path={modelPath()} animation={animation()} onLoad={onLoad} onError={onError} />}>
+        {/* `window.viewer` is exposed for poking at the scene from the devtools console. */}
+        <WowViewer assets={assets} ref={(v) => ((window as unknown as { viewer: unknown }).viewer = v)}>
+          <Show when={mode() === 'character'}>
             <Character assets={assets} gameData={gameData} appearance={appearance} animation={animation()} onLoad={onLoad} onError={onError} />
+          </Show>
+          <Show when={mode() === 'creature'}>
+            <Creature assets={assets} gameData={gameData} displayId={displayId()} animation={animation()} onLoad={onLoad} onError={onError} />
+          </Show>
+          <Show when={mode() === 'model'}>
+            <Model assets={assets} path={modelPath()} animation={animation()} onLoad={onLoad} onError={onError} />
           </Show>
         </WowViewer>
         <Show when={status()}>

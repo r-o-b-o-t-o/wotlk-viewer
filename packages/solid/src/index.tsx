@@ -3,7 +3,8 @@ import {
   type ParentProps,
 } from 'solid-js';
 import {
-  CharacterBuilder, GameData, M2Instance, Viewer, type AssetManager, type CharacterAppearance, type ViewerOptions,
+  CharacterBuilder, CreatureBuilder, GameData, M2Instance, Viewer, type AssetManager, type CharacterAppearance,
+  type ViewerOptions,
 } from '@wotlk-viewer/core';
 
 const ViewerContext = createContext<() => Viewer | null>();
@@ -23,10 +24,10 @@ export interface WowViewerProps extends ParentProps {
 export function WowViewer(props: WowViewerProps): JSX.Element {
   const [local, rest] = splitProps(props, ['assets', 'background', 'antialias', 'ref', 'children']);
   const [viewer, setViewer] = createSignal<Viewer | null>(null);
-  let container!: HTMLDivElement;
+  let canvas!: HTMLCanvasElement;
 
   onMount(() => {
-    const opts: ViewerOptions = { container, antialias: local.antialias };
+    const opts: ViewerOptions = { canvas, antialias: local.antialias };
     if (local.background !== undefined) opts.background = local.background;
     const v = new Viewer(opts);
     v.start();
@@ -35,8 +36,10 @@ export function WowViewer(props: WowViewerProps): JSX.Element {
     onCleanup(() => v.dispose());
   });
 
+  // The canvas is part of the template so Solid's child reconciliation never removes it.
   return (
-    <div ref={container} class={rest.class} style={rest.style ?? { width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+    <div class={rest.class} style={rest.style ?? { width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <canvas ref={canvas} style={{ display: 'block', width: '100%', height: '100%' }} />
       <ViewerContext.Provider value={viewer}>{viewer() ? local.children : null}</ViewerContext.Provider>
     </div>
   );
@@ -126,6 +129,25 @@ export function Character(props: CharacterProps): JSX.Element {
   useInstance(
     () => new CharacterBuilder(props.assets, data(), viewer.lighting).build(props.appearance),
     () => JSON.stringify(props.appearance),
+    props,
+  );
+  return null;
+}
+
+export interface CreatureProps extends InstanceProps {
+  assets: AssetManager;
+  gameData?: GameData;
+  /** CreatureDisplayInfo id. */
+  displayId: number;
+}
+
+/** Displays a creature by display id (model, skin variation, scale). */
+export function Creature(props: CreatureProps): JSX.Element {
+  const viewer = useViewer();
+  const data = createMemo(() => props.gameData ?? new GameData(props.assets));
+  useInstance(
+    () => new CreatureBuilder(props.assets, data(), viewer.lighting).build(props.displayId),
+    () => props.displayId,
     props,
   );
   return null;

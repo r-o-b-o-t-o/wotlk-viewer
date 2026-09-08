@@ -2,7 +2,8 @@ import {
   createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode,
 } from 'react';
 import {
-  CharacterBuilder, GameData, M2Instance, Viewer, type AssetManager, type CharacterAppearance, type ViewerOptions,
+  CharacterBuilder, CreatureBuilder, GameData, M2Instance, Viewer, type AssetManager, type CharacterAppearance,
+  type ViewerOptions,
 } from '@wotlk-viewer/core';
 
 const ViewerContext = createContext<Viewer | null>(null);
@@ -21,12 +22,12 @@ export interface WowViewerProps {
 
 /** Hosts a canvas with a running `Viewer`; children get it through `useViewer()`. */
 export function WowViewer({ assets, background, antialias, className, style, onViewer, children }: WowViewerProps) {
-  const container = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   void assets;
 
   useEffect(() => {
-    const opts: ViewerOptions = { container: container.current!, antialias };
+    const opts: ViewerOptions = { canvas: canvas.current!, antialias };
     if (background !== undefined) opts.background = background;
     const v = new Viewer(opts);
     v.start();
@@ -40,7 +41,8 @@ export function WowViewer({ assets, background, antialias, className, style, onV
   }, []);
 
   return (
-    <div ref={container} className={className} style={style ?? { width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+    <div className={className} style={style ?? { width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+      <canvas ref={canvas} style={{ display: 'block', width: '100%', height: '100%' }} />
       <ViewerContext.Provider value={viewer}>{viewer ? children : null}</ViewerContext.Provider>
     </div>
   );
@@ -131,6 +133,28 @@ export function Character(props: CharacterProps) {
       return new CharacterBuilder(props.assets, data.current, viewer.lighting).build(props.appearance);
     },
     [JSON.stringify(props.appearance)],
+    props,
+  );
+  return null;
+}
+
+export interface CreatureProps extends InstanceProps {
+  assets: AssetManager;
+  gameData?: GameData;
+  /** CreatureDisplayInfo id. */
+  displayId: number;
+}
+
+/** Displays a creature by display id (model, skin variation, scale). */
+export function Creature(props: CreatureProps) {
+  const viewer = useViewer();
+  const data = useRef<GameData | null>(null);
+  useInstance(
+    () => {
+      data.current ??= props.gameData ?? new GameData(props.assets);
+      return new CreatureBuilder(props.assets, data.current, viewer.lighting).build(props.displayId);
+    },
+    [props.displayId],
     props,
   );
   return null;

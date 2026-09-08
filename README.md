@@ -31,7 +31,8 @@ WOW_CLIENT_DIR="C:/Games/WoW/WoW_335a_Clean/Extracted" WOW_DB_URL="mysql://root:
 ```
 
 Other scripts: `npm test` (Vitest, parser and DBC tests run against the real client and are skipped when it is absent),
-`npm run typecheck`, `npm run build`.
+`npm run typecheck`, `npm run build`, `npm run format` (Prettier, config in `.prettierrc`). Commit messages follow
+[Conventional Commits](https://www.conventionalcommits.org/).
 
 ## Using the core library
 

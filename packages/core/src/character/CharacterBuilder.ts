@@ -321,7 +321,10 @@ export class CharacterBuilder {
 					),
 				);
 		}
-		const usedSheaths = new Set<AttachmentId>();
+		const taken = new Set<AttachmentId>();
+		/** First candidate nothing else uses, so two weapons never share a slot. */
+		const pick = (...candidates: AttachmentId[]) =>
+			candidates.find((a) => !taken.has(a)) ?? candidates[candidates.length - 1];
 		for (const slot of [EquipmentSlot.MainHand, EquipmentSlot.OffHand, EquipmentSlot.Ranged]) {
 			const item = bySlot.get(slot);
 			if (!item?.display.leftModel) continue;
@@ -329,13 +332,15 @@ export class CharacterBuilder {
 			const folder = isShield ? "Shield" : "Weapon";
 			let attachment: AttachmentId;
 			if (slot === EquipmentSlot.Ranged) {
-				// Ranged weapons always hang on the back, next to a sheathed two-hander if any.
-				attachment = usedSheaths.has(AttachmentId.SheathMainHand)
-					? AttachmentId.SheathOffHand
-					: AttachmentId.SheathMainHand;
+				// Ranged weapons hang on the back, beside whatever is already sheathed there.
+				attachment = pick(AttachmentId.SheathMainHand, AttachmentId.SheathOffHand);
 			} else if (app.sheathed) {
 				if (item.inventoryType === InventoryType.Holdable) continue; // held items vanish when sheathed
-				attachment = sheathAttachment(item, slot === EquipmentSlot.OffHand);
+				const offHand = slot === EquipmentSlot.OffHand;
+				attachment = pick(
+					sheathAttachment(item, offHand),
+					offHand ? AttachmentId.SheathOffHand : AttachmentId.SheathMainHand,
+				);
 			} else {
 				attachment =
 					slot === EquipmentSlot.MainHand
@@ -344,7 +349,7 @@ export class CharacterBuilder {
 							? AttachmentId.Shield
 							: AttachmentId.HandLeft;
 			}
-			usedSheaths.add(attachment);
+			taken.add(attachment);
 			attachments.push(
 				this.attachItem(
 					body,

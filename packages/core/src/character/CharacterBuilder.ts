@@ -216,6 +216,8 @@ export class CharacterBuilder {
 		if (feet) setGroup(GeosetGroup.Boots, feet.display.geosetGroups[0]);
 		const hands = bySlot.get(EquipmentSlot.Hands);
 		if (hands) setGroup(GeosetGroup.Gloves, hands.display.geosetGroups[0]);
+		// A glove carries its own cuff, so the sleeve it covers goes away instead of poking through.
+		if (hands && hands.display.geosetGroups[0] > 0) groups.set(GeosetGroup.Sleeves, 1);
 		const waist = bySlot.get(EquipmentSlot.Waist);
 		if (waist) setGroup(GeosetGroup.Belt, waist.display.geosetGroups[0]);
 		const back = bySlot.get(EquipmentSlot.Back);

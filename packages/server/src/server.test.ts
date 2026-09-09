@@ -41,6 +41,15 @@ describe.skipIf(!hasClient)("GameData", () => {
 		expect(opts.faces.length).toBeGreaterThan(5);
 	});
 
+	it("finds a hair texture for a bald style, which facial hair needs", async () => {
+		const data = await load();
+		// Gnome male style 0 is bald and carries no sheet, but its beard samples the hair slot.
+		const bald = await data.findCharSection(7, 0, CharSectionType.Hair, 0, 0);
+		expect(bald?.textures[0]).toBe("");
+		expect(await data.findHairTexture(7, 0, 0)).toBe("Character\\Gnome\\Hair00_00.blp");
+		expect(await data.findHairTexture(7, 0, 3)).toBe("Character\\Gnome\\Hair00_03.blp");
+	});
+
 	it("sizes a tamed pet from its creature family", async () => {
 		const data = await load();
 		const moth = (await data.creatureFamilies()).get(37)!;

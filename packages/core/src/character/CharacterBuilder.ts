@@ -316,8 +316,14 @@ export class CharacterBuilder {
 		body.setReplaceableTexture(M2TextureType.Skin, skinTexture);
 
 		const load = (path: string | undefined) => (path ? this.assets.loadTexture(path) : null);
+		// A bald style carries no sheet of its own, but facial hair samples the same slot, so fall back
+		// to the colour's sheet whenever the model has that slot to fill (tauren have none).
+		let hairPath = hairSec?.textures[0];
+		if (!hairPath && body.hasTextureType(M2TextureType.Hair)) {
+			hairPath = await this.data.findHairTexture(race, sex, hairColor);
+		}
 		const [hairTex, skinExtraTex, capeTex] = await Promise.all([
-			load(hairSec?.textures[0]),
+			load(hairPath),
 			load(skinSec.textures[1]),
 			load(back?.display.leftModelTexture && objectComponentPath("Cape", back.display.leftModelTexture, "blp")),
 		]);

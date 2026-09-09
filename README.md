@@ -153,7 +153,9 @@ Any other backend works as long as it implements `DataSource` (`readFile`, optio
    every equipped item (`Item\TextureComponents\...`, gender-specific with `_U` fallback) composited on a 2D canvas. The
    guild tabard (the one item flagged in `ItemDisplayInfo`) instead takes background, border and emblem layers from
    `Textures\GuildEmblems` when `guildEmblem` is given.
-4. Hair texture (texture type 6), cape (type 2) and monster textures are bound to the M2's replaceable slots.
+4. Hair texture (texture type 6), cape (type 2) and monster textures are bound to the M2's replaceable slots. A bald
+   hair style carries no texture of its own, so the colour's sheet is taken from another style: facial hair samples
+   the same slot, and orc and gnome male beards come out untextured otherwise.
 5. Helm (`_<RacePrefix><M|F>` variant), shoulders, weapons and shields are loaded as separate `M2Instance`s and
    attached to the body's attachment points; they animate on their own.
 6. A hand that carries something has its finger bones posed from the `HandsClosed` animation while the body keeps

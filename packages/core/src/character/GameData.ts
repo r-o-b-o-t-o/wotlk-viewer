@@ -336,6 +336,23 @@ export class GameData {
 		return (await this.sectionIndex()).get(`${race}|${sex}`)?.get(`${type}|${variation}|${color}`);
 	}
 
+	/**
+	 * Hair sheet for a colour, taken from whichever style carries one. A bald style has none of its
+	 * own, and facial hair samples the same texture slot, so orc and gnome male beards come out
+	 * untextured without this; both races ship a single sheet per colour, so any style will do.
+	 */
+	async findHairTexture(race: number, sex: number, color: number): Promise<string | undefined> {
+		const sections = await this.charSections();
+		return sections.find(
+			(s) =>
+				s.race === race &&
+				s.sex === sex &&
+				s.type === CharSectionType.Hair &&
+				s.color === color &&
+				s.textures[0],
+		)?.textures[0];
+	}
+
 	async findHairGeoset(race: number, sex: number, variation: number): Promise<CharHairGeoset | undefined> {
 		return (await this.hairIndex()).get(`${race}|${sex}`)?.get(String(variation));
 	}

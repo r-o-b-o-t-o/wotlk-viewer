@@ -14,10 +14,17 @@ export {
 } from "./data/DataSource.js";
 export { AssetManager } from "./AssetManager.js";
 export { M2Model } from "./render/M2Model.js";
-export { M2Material, TexCoordSource, type M2Lighting, type M2MaterialOptions } from "./render/M2Material.js";
+export {
+	M2Material,
+	M2_MAX_LIGHTS,
+	TexCoordSource,
+	type M2Light,
+	type M2Lighting,
+	type M2MaterialOptions,
+} from "./render/M2Material.js";
 export { M2Instance, type PlayOptions } from "./render/M2Instance.js";
 export { ParticleSystem } from "./render/ParticleSystem.js";
-export { Viewer, type ViewerOptions } from "./render/Viewer.js";
+export { Viewer, type BackdropLighting, type ViewerOptions } from "./render/Viewer.js";
 export { blpToTexture, canvasToTexture, createWhiteTexture, type TextureOptions } from "./render/textures.js";
 export * from "./character/constants.js";
 export { GameData } from "./character/GameData.js";
@@ -44,5 +51,6 @@ export {
 } from "./character/CharacterBuilder.js";
 export { CreatureBuilder } from "./character/CreatureBuilder.js";
 export { petPosition, petScale, type PetInfo } from "./character/pet.js";
+export { BACKDROP_SCENES, BackdropBuilder, mountBackdrop, type Backdrop } from "./character/backdrop.js";
 export { memo } from "./util/memo.js";
 export { mountInstance, positionInstance, type InstancePosition, type MountOptions } from "./render/mountInstance.js";

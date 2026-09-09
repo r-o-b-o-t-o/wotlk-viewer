@@ -12,10 +12,12 @@ import {
 	type ParentProps,
 } from "solid-js";
 import {
+	BackdropBuilder,
 	CharacterBuilder,
 	CreatureBuilder,
 	GameData,
 	M2Instance,
+	mountBackdrop,
 	mountInstance,
 	positionInstance,
 	Viewer,
@@ -157,6 +159,39 @@ export function Character(props: CharacterProps): JSX.Element {
 		() => new CharacterBuilder(props.assets, data(), viewer.lighting).build(props.appearance),
 		() => JSON.stringify(props.appearance),
 		props,
+	);
+	return null;
+}
+
+export interface BackdropProps {
+	assets: AssetManager;
+	gameData?: GameData;
+	/** ChrRaces id; the scene shown is the one that race's character-creation screen uses. */
+	race: number;
+	onError?: (error: unknown) => void;
+}
+
+/**
+ * Shows a race's character-creation scene behind the models. It keeps its own camera, so the mouse
+ * controls leave it alone and it always faces the viewer.
+ */
+export function Backdrop(props: BackdropProps): JSX.Element {
+	const viewer = useViewer();
+	const data = createMemo(() => props.gameData ?? new GameData(props.assets));
+	createEffect(
+		on(
+			() => props.race,
+			(race) =>
+				onCleanup(
+					mountBackdrop(
+						viewer,
+						() => new BackdropBuilder(props.assets, data(), viewer.backdropLighting).build(race),
+						{
+							onError: (e) => props.onError?.(e),
+						},
+					),
+				),
+		),
 	);
 	return null;
 }

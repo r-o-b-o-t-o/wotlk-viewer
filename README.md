@@ -8,11 +8,11 @@ from an extracted game client and assembles fully equipped player characters.
 
 | Package                | Purpose                                                                                                                                                                                                                                   |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@wotlk-viewer/core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, typed DBC access (`GameData`). UI-framework agnostic.                                     |
+| `@wotlk-viewer/core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, `BackdropBuilder`, typed DBC access (`GameData`). UI-framework agnostic.                  |
 | `@wotlk-viewer/server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` (at `@wotlk-viewer/server/fs`) for Node scripts and tests. |
-| `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`.                                                                                                                                                                |
+| `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`, `<Backdrop>`.                                                                                                                                                  |
 | `@wotlk-viewer/react`  | The same components for React.                                                                                                                                                                                                            |
-| `apps/demo`            | SolidJS demo: browse database characters and their pets, tweak appearance and equipment, play animations.                                                                                                                                 |
+| `apps/demo`            | SolidJS demo: browse database characters and their pets, stand them in their race's character-creation scene, tweak appearance and equipment, play animations.                                                                            |
 
 ## Getting started
 
@@ -72,7 +72,16 @@ await character.playAnimation(AnimationId.EmoteDance);
 Plain models work the same way with `M2Instance.create(await assets.loadModel(path), assets, viewer.lighting)`;
 creatures with `new CreatureBuilder(assets, gameData, viewer.lighting).build(displayId)`.
 
-`Viewer` is a convenience (renderer, orbit camera, resize handling, render loop). `viewer.pivot` names the instance
+`BackdropBuilder` loads the scene a race's character-creation screen stands it in — the eight models under
+`Interface\Glues\Models`, with gnomes sharing the dwarf one and trolls the orc one. `viewer.setBackdrop()` draws it in
+a pass of its own, seen through the camera baked into the model, so the mouse controls never move it:
+
+```ts
+const backdrop = await new BackdropBuilder(assets, gameData, viewer.backdropLighting).build(race);
+if (backdrop) viewer.setBackdrop(backdrop.instance, backdrop.lighting);
+```
+
+`Viewer` is a convenience (renderer, orbit camera, backdrop pass, resize handling, render loop). `viewer.pivot` names the instance
 `frame()` fits and the camera orbits, its own body alone: the same character is framed the same way whatever it has
 equipped and whatever stands next to it, and a pet or a polearm may start partly out of frame rather than push the
 camera off its subject. `M2Instance` is a regular
@@ -100,13 +109,16 @@ camera on the character rather than on the pair:
 <Creature assets={assets} displayId={character.pet.displayId} pet={character.pet} position={petPosition} />
 ```
 
+`<Backdrop assets race={1} />` puts that race's character-creation scene behind everything.
+
 `useViewer()` gives children the `Viewer`. For other frameworks, `mountInstance(viewer, load, opts)`
-from the core package holds the same lifecycle (load, cancel, add, frame, dispose) behind one disposer.
+from the core package holds the same lifecycle (load, cancel, add, frame, dispose) behind one disposer, and
+`mountBackdrop(viewer, load)` does the same for a backdrop.
 The package ships TSX source (like most Solid libraries); compile it with `vite-plugin-solid` in the consuming app.
 
 ### React
 
-Same API from `@wotlk-viewer/react` (`WowViewer`, `Model`, `Character`, `Creature`, `useViewer`). Needs a bundler with the
+Same API from `@wotlk-viewer/react` (`WowViewer`, `Model`, `Character`, `Creature`, `Backdrop`, `useViewer`). Needs a bundler with the
 automatic JSX runtime (Vite does this out of the box).
 
 ### Serving game data
@@ -162,7 +174,8 @@ Any other backend works as long as it implements `DataSource` (`readFile`, optio
    playing its own, so the grip closes around the weapon.
 
 Rendering uses one draw group per skin batch with a small custom shader (1–2 texture layers, WoW blend modes,
-vertex color / alpha / UV-transform tracks, ambient + directional light in gamma space like the original client).
+vertex color / alpha / UV-transform tracks, ambient + up to three directional lights and linear fog, in gamma space
+like the original client).
 Skinning goes through three.js' `SkinnedMesh` with bone matrices computed by `M2Animator` (translation, compressed
 quaternion and scale tracks, global sequences, external `.anim` files loaded on demand).
 
@@ -215,8 +228,21 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Item region textures are filtered per slot (e.g. gloves paint only hands and forearms) since `ItemDisplayInfo`
   rows carry the whole armor set; the robe rule adds the leg regions to chest pieces.
 - The attachment `animateAttached` visibility track is ignored.
-- Single directional light plus ambient; no fog or shadows. `Viewer` sets `outputColorSpace = LinearSRGBColorSpace`
-  because shading is done in gamma space; mixing in standard three.js materials needs color-management care.
+- Ambient plus up to three directional lights and linear fog, no shadows; the models' own light blocks are not read.
+  `Viewer` sets `outputColorSpace = LinearSRGBColorSpace` because shading is done in gamma space; mixing in standard
+  three.js materials needs color-management care.
+- A backdrop is a second render pass with the depth buffer cleared after it, so the character is drawn on top of the
+  whole scene and framed by `frame()` — where the client puts it inside the scene, at the point its camera looks at,
+  with foreground props able to cover it and a shadow on the ground. Nothing else about the two passes is shared:
+  the models keep the viewer's own lighting and stay unfogged.
+- Backdrop lighting and fog are the `RaceLights` and `CharModelFogInfo` tables from the client's
+  `Interface\GlueXML\GlueParent.lua`, which is where the glue screen gets them; the point lights still inside the
+  models are not read, and neither is the per-scene `SetGlow` bloom amount. Fog reaches only the opaque, alpha-key
+  and alpha batches: it washes an additive or modulated one out instead of dimming it.
+- A backdrop is shown through camera 0 of its own model, using only the camera's base position and target. The
+  position and target tracks are ignored, which costs nothing here: all eight scenes leave them at zero. Below 4:3
+  the vertical field of view stops widening, so a tall viewport crops the sides rather than looking past the top of
+  a scene the client never framed that way.
 - DBC tables are assumed to use 4-byte fields (true for every 3.3.5a table read here). Little-endian host assumed.
 - Items whose entry is missing from the client's `Item.dbc` (custom server items) are skipped, and a
   `transmogEntry` the client does not know counts as no transmog, falling back to the real item.

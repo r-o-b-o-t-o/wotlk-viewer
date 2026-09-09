@@ -38,13 +38,35 @@ export interface M2MaterialOptions {
 	combiner: number;
 }
 
-/** Scene lighting shared by all M2 materials. */
+/** How many directional lights a material shades with; the glue backdrops use at most three. */
+export const M2_MAX_LIGHTS = 3;
+
+/** One directional light. */
+export interface M2Light {
+	/** Unit vector towards the light, view space. */
+	direction: Vector3;
+	/** Diffuse colour, already scaled by the light's intensity; black is off. */
+	color: Vector3;
+}
+
+/**
+ * Scene lighting shared by all M2 materials: an ambient term plus up to `M2_MAX_LIGHTS`
+ * directional ones. A material keeps the vectors themselves, so editing one in place reaches every
+ * material at once; growing the array afterwards does not.
+ */
 export interface M2Lighting {
 	ambient: Vector3;
-	diffuse: Vector3;
-	/** Direction towards the light, view space. */
-	direction: Vector3;
+	lights: M2Light[];
+	/**
+	 * Linear fog: `x`, `y`, `z` are its colour and `w` the distance at which it has taken over
+	 * completely, 0 leaving the scene clear. Packed into one vector so that a material binds it once
+	 * and still sees later edits, as it does the light vectors.
+	 */
+	fog: Vector4;
 }
+
+/** Zero vector standing in for a light a `M2Lighting` does not have. Never written to. */
+const NO_LIGHT = new Vector3();
 
 const VERTEX = /* glsl */ `
 #include <common>
@@ -56,6 +78,7 @@ uniform int uTexCoord1;
 varying vec2 vUv0;
 varying vec2 vUv1;
 varying vec3 vNormal;
+varying float vViewDepth;
 
 vec2 texCoord(int src, vec3 n) {
   if (src == 2) return vec2(n.x * 0.5 + 0.5, 0.5 - n.y * 0.5);
@@ -73,6 +96,7 @@ void main() {
   #include <begin_vertex>
   #include <skinning_vertex>
   #include <project_vertex>
+  vViewDepth = -mvPosition.z;
   vNormal = normalize(transformedNormal);
   vUv0 = (uTexMat0 * vec4(texCoord(uTexCoord0, vNormal), 0.0, 1.0)).xy;
   vUv1 = (uTexMat1 * vec4(texCoord(uTexCoord1, vNormal), 0.0, 1.0)).xy;
@@ -88,12 +112,15 @@ uniform int uCombiner;
 uniform float uAlphaTest;
 uniform bool uOpaque;
 uniform bool uUnlit;
+uniform bool uUnfogged;
 uniform vec3 uAmbient;
-uniform vec3 uDiffuse;
-uniform vec3 uLightDir;
+uniform vec3 uLightColor[MAX_LIGHTS];
+uniform vec3 uLightDir[MAX_LIGHTS];
+uniform vec4 uFog;
 varying vec2 vUv0;
 varying vec2 vUv1;
 varying vec3 vNormal;
+varying float vViewDepth;
 
 void main() {
   vec4 t0 = texture2D(uTex0, vUv0);
@@ -117,8 +144,11 @@ void main() {
   if (a < uAlphaTest) discard;
   if (!uUnlit) {
     vec3 n = normalize(gl_FrontFacing ? vNormal : -vNormal);
-    rgb *= uAmbient + uDiffuse * max(dot(n, uLightDir), 0.0);
+    vec3 light = uAmbient;
+    for (int i = 0; i < MAX_LIGHTS; i++) light += uLightColor[i] * max(dot(n, uLightDir[i]), 0.0);
+    rgb *= light;
   }
+  if (!uUnfogged && uFog.w > 0.0) rgb = mix(rgb, uFog.xyz, clamp(vViewDepth / uFog.w, 0.0, 1.0));
   gl_FragColor = vec4(rgb, a);
 }
 `;
@@ -163,11 +193,16 @@ export function applyM2BlendMode(mat: Material, mode: number): void {
 export class M2Material extends ShaderMaterial {
 	constructor(opts: M2MaterialOptions, lighting: M2Lighting, white: Texture) {
 		const { blendMode, flags } = opts;
+		// A uniform array is a fixed size, so pad the missing lights out with black ones.
+		const lights = Array.from({ length: M2_MAX_LIGHTS }, (_, i) => ({
+			direction: lighting.lights[i]?.direction ?? NO_LIGHT,
+			color: lighting.lights[i]?.color ?? NO_LIGHT,
+		}));
 		super({
 			vertexShader: VERTEX,
 			fragmentShader: FRAGMENT,
 			// three.js only defines USE_UV1 for built-in map channels, so declare it here to get `uv1`.
-			defines: { USE_UV1: "" },
+			defines: { USE_UV1: "", MAX_LIGHTS: String(M2_MAX_LIGHTS) },
 			uniforms: {
 				uTex0: { value: white },
 				uTex1: { value: white },
@@ -181,9 +216,13 @@ export class M2Material extends ShaderMaterial {
 				uAlphaTest: { value: alphaTestFor(blendMode) },
 				uOpaque: { value: blendMode === M2BlendMode.Opaque },
 				uUnlit: { value: (flags & M2MaterialFlags.Unlit) !== 0 },
+				// Fog washes an additive or modulated batch out instead of dimming it, so only the
+				// modes that paint over what is behind them take any.
+				uUnfogged: { value: (flags & M2MaterialFlags.Unfogged) !== 0 || blendMode > M2BlendMode.Alpha },
+				uFog: { value: lighting.fog },
 				uAmbient: { value: lighting.ambient },
-				uDiffuse: { value: lighting.diffuse },
-				uLightDir: { value: lighting.direction },
+				uLightColor: { value: lights.map((l) => l.color) },
+				uLightDir: { value: lights.map((l) => l.direction) },
 			},
 		});
 		this.side = flags & M2MaterialFlags.TwoSided ? DoubleSide : FrontSide;

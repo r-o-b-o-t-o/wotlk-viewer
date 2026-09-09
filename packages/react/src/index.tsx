@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
+	BackdropBuilder,
 	CharacterBuilder,
 	CreatureBuilder,
 	GameData,
 	M2Instance,
+	mountBackdrop,
 	mountInstance,
 	positionInstance,
 	Viewer,
@@ -145,6 +147,33 @@ export function Character(props: CharacterProps) {
 		[JSON.stringify(props.appearance)],
 		props,
 	);
+	return null;
+}
+
+export interface BackdropProps {
+	assets: AssetManager;
+	gameData?: GameData;
+	/** ChrRaces id; the scene shown is the one that race's character-creation screen uses. */
+	race: number;
+	onError?: (error: unknown) => void;
+}
+
+/**
+ * Shows a race's character-creation scene behind the models. It keeps its own camera, so the mouse
+ * controls leave it alone and it always faces the viewer.
+ */
+export function Backdrop(props: BackdropProps) {
+	const viewer = useViewer();
+	const data = useRef<GameData | null>(null);
+	useEffect(() => {
+		data.current ??= props.gameData ?? new GameData(props.assets);
+		return mountBackdrop(
+			viewer,
+			() => new BackdropBuilder(props.assets, data.current!, viewer.backdropLighting).build(props.race),
+			{ onError: (e) => props.onError?.(e) },
+		);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [props.race]);
 	return null;
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
-import { AssetManager, CharSectionType, GameData, Gender, petScale } from "@wotlk-viewer/core";
+import { AssetManager, BACKDROP_SCENES, CharSectionType, GameData, Gender, petScale } from "@wotlk-viewer/core";
 import { FsDataSource } from "./FsDataSource.js";
 import { defaultRoots, FileResolver } from "./files.js";
 
@@ -65,6 +65,16 @@ describe.skipIf(!hasClient)("GameData", () => {
 		const crab = (await data.creatureFamilies()).get(8)!;
 		expect(crab.maxScale).toBeCloseTo(1.4);
 		expect(petScale(crab, 80)).toBe(1);
+	});
+
+	it("has a character-creation backdrop for every playable race", async () => {
+		const races = await (await load()).races();
+		for (const id of [1, 2, 3, 4, 5, 6, 7, 8, 10, 11]) {
+			expect(BACKDROP_SCENES[races.get(id)!.clientFileString]).toBeTruthy();
+		}
+		// The two races the client gives no scene of their own.
+		expect(BACKDROP_SCENES.Gnome).toBe("Dwarf");
+		expect(BACKDROP_SCENES.Troll).toBe("Orc");
 	});
 
 	it("resolves items to display info", async () => {

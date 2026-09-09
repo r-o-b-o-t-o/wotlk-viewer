@@ -1,6 +1,17 @@
-import { Box3, Color, Group, LinearSRGBColorSpace, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
+import {
+	Box3,
+	Color,
+	Group,
+	LinearSRGBColorSpace,
+	MathUtils,
+	PerspectiveCamera,
+	Scene,
+	Vector3,
+	Vector4,
+	WebGLRenderer,
+} from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { M2Lighting } from "./M2Material.js";
+import { M2_MAX_LIGHTS, type M2Lighting } from "./M2Material.js";
 import type { M2Instance } from "./M2Instance.js";
 
 export interface ViewerOptions {
@@ -12,14 +23,33 @@ export interface ViewerOptions {
 	antialias?: boolean;
 }
 
+/** The light set of a backdrop scene, in the model's own space (see `Viewer.setBackdrop`). */
+export interface BackdropLighting {
+	/** Ambient term for the whole scene. */
+	ambient: [number, number, number];
+	/** Directional lights; `direction` is the way the light travels, so it faces the lit surfaces. */
+	lights: { direction: [number, number, number]; color: [number, number, number] }[];
+	/** Linear fog, if the scene has any: its colour and the distance at which it is complete. */
+	fog?: { color: [number, number, number]; end: number };
+}
+
 /** Share of the pending zoom spent per frame; OrbitControls damps rotation and panning the same way. */
 const ZOOM_DAMPING = 0.08;
 /** Pending zoom below this is not worth another frame of easing. */
 const ZOOM_EPSILON = 1e-4;
+/** Narrowest frame a backdrop is composed for; the client's own minimum was 4:3. */
+const MIN_BACKDROP_ASPECT = 4 / 3;
 /** Log-distance change per wheel notch and per pixel of ctrl-drag. */
 const WHEEL_ZOOM_SPEED = 0.0015;
 const DRAG_ZOOM_SPEED = 0.006;
 const tmpOffset = new Vector3();
+const tmpEye = new Vector3();
+const tmpTarget = new Vector3();
+
+/** Turns a point or direction in WoW's Z-up space into the scene's Y-up one, as `root` does. */
+function zUpToScene(v: [number, number, number] | ArrayLike<number>, out: Vector3): Vector3 {
+	return out.set(v[0], v[2], -v[1]);
+}
 
 /**
  * Minimal scene setup: renderer, orbit camera, lighting and a render loop that updates M2 instances.
@@ -41,12 +71,27 @@ export class Viewer {
 	pivot: M2Instance | null = null;
 	readonly lighting: M2Lighting = {
 		ambient: new Vector3(0.55, 0.55, 0.55),
-		diffuse: new Vector3(0.7, 0.7, 0.7),
-		direction: new Vector3(0.3, 0.6, 0.75).normalize(),
+		lights: [{ color: new Vector3(0.7, 0.7, 0.7), direction: new Vector3(0.3, 0.6, 0.75).normalize() }],
+		fog: new Vector4(0, 0, 0, 0), // a bare Vector4 has w = 1, which would fog the scene solid
+	};
+	/** Scene holding the backdrop, drawn before `scene` through `backdropCamera`. */
+	readonly backdropScene = new Scene();
+	/** The backdrop's own camera, fixed where its scene was composed; mouse controls never touch it. */
+	readonly backdropCamera = new PerspectiveCamera();
+	/** Lighting of the backdrop alone, in its camera's view space; `setBackdrop` fills it in. */
+	readonly backdropLighting: M2Lighting = {
+		ambient: new Vector3(),
+		lights: Array.from({ length: M2_MAX_LIGHTS }, () => ({ color: new Vector3(), direction: new Vector3() })),
+		fog: new Vector4(0, 0, 0, 0), // a bare Vector4 has w = 1, which would fog the scene solid
 	};
 	/** Animation speed multiplier; 0 pauses. */
 	timeScale = 1;
 
+	/** Z-up parent for the backdrop, matching `root`. */
+	private readonly backdropRoot = new Group();
+	private backdrop: M2Instance | null = null;
+	/** The backdrop camera's diagonal field of view; `resize` derives a vertical one from it. */
+	private backdropFov = 0;
 	private raf = 0;
 	private lastTime = 0;
 	private readonly resizeObserver: ResizeObserver | null = null;
@@ -66,8 +111,12 @@ export class Viewer {
 		});
 		this.renderer.outputColorSpace = LinearSRGBColorSpace; // shading is done in gamma space
 		this.renderer.setPixelRatio(window.devicePixelRatio);
-		if (opts.background !== null)
-			this.scene.background = new Color().setHex(opts.background ?? 0x2a2d33, LinearSRGBColorSpace);
+		// The clear colour rather than a scene background: three.js clears the depth buffer along with
+		// a scene's background colour, which would wipe out the backdrop pass.
+		this.renderer.setClearColor(
+			new Color().setHex(opts.background ?? 0x2a2d33, LinearSRGBColorSpace),
+			opts.background === null ? 0 : 1,
+		);
 
 		this.camera = new PerspectiveCamera(45, 1, 0.05, 500);
 		this.camera.position.set(4, 1.5, 0);
@@ -80,6 +129,8 @@ export class Viewer {
 
 		this.root.rotation.x = -Math.PI / 2;
 		this.scene.add(this.root);
+		this.backdropRoot.rotation.x = -Math.PI / 2;
+		this.backdropScene.add(this.backdropRoot);
 
 		const host = canvas.parentElement ?? canvas;
 		this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -148,6 +199,67 @@ export class Viewer {
 		this.root.remove(instance);
 	}
 
+	/**
+	 * Shows `instance` behind the models, seen through the camera baked into its model — the view the
+	 * scene was composed for. It never moves, so orbiting or zooming the subject leaves the backdrop
+	 * exactly where it is. Pass null to take it away; the caller keeps ownership either way.
+	 */
+	setBackdrop(instance: M2Instance | null, lighting?: BackdropLighting): void {
+		if (this.backdrop) this.backdropRoot.remove(this.backdrop);
+		this.backdrop = null;
+		if (!instance) return;
+		const cam = instance.model.m2.cameras[0];
+		if (!cam) {
+			console.warn(`Backdrop ${instance.model.path} carries no camera, so there is no view to show it from.`);
+			return;
+		}
+		this.backdrop = instance;
+		this.backdropRoot.add(instance);
+		this.backdropFov = cam.fov;
+		this.backdropCamera.near = cam.nearClip;
+		this.backdropCamera.far = cam.farClip;
+		this.backdropCamera.position.copy(zUpToScene(cam.position, tmpEye));
+		this.backdropCamera.up.set(0, 1, 0);
+		this.backdropCamera.lookAt(zUpToScene(cam.target, tmpTarget));
+		this.backdropCamera.updateMatrixWorld();
+		this.backdropCamera.matrixWorldInverse.copy(this.backdropCamera.matrixWorld).invert();
+		this.updateBackdropProjection();
+		this.applyBackdropLighting(lighting);
+	}
+
+	/** Turns a backdrop's light set into the view-space one its materials already read. */
+	private applyBackdropLighting(lighting: BackdropLighting | undefined): void {
+		// Without a light set, leave the scene at full brightness rather than in the dark.
+		this.backdropLighting.ambient.fromArray(lighting?.ambient ?? [1, 1, 1]);
+		const fog = lighting?.fog;
+		this.backdropLighting.fog.set(...(fog?.color ?? [0, 0, 0]), fog?.end ?? 0);
+		this.backdropLighting.lights.forEach((slot, i) => {
+			const light = lighting?.lights[i];
+			if (!light) {
+				// An unused slot still needs a real direction: normalizing a zero vector leaves NaN
+				// behind, and that spreads through the shading even when multiplied by black.
+				slot.color.setScalar(0);
+				slot.direction.set(0, 0, 1);
+				return;
+			}
+			slot.color.fromArray(light.color);
+			// The client stores the way the light travels; shading wants the way back towards it.
+			zUpToScene(light.direction, slot.direction)
+				.negate()
+				.transformDirection(this.backdropCamera.matrixWorldInverse);
+		});
+	}
+
+	/** The client reads a camera's diagonal FOV as a vertical one for the aspect it is drawn at. */
+	private updateBackdropProjection(): void {
+		this.backdropCamera.aspect = this.camera.aspect;
+		// A frame taller than the client ever ran at would look further up than the scene reaches and
+		// leave a band of empty sky, so a narrow viewport crops the sides instead.
+		const aspect = Math.max(this.camera.aspect, MIN_BACKDROP_ASPECT);
+		this.backdropCamera.fov = MathUtils.radToDeg(this.backdropFov / Math.sqrt(1 + aspect ** 2));
+		this.backdropCamera.updateProjectionMatrix();
+	}
+
 	clear(dispose = true): void {
 		for (const inst of [...this.instances]) {
 			this.remove(inst);
@@ -208,6 +320,7 @@ export class Viewer {
 		this.renderer.setSize(w, h, false);
 		this.camera.aspect = w / h;
 		this.camera.updateProjectionMatrix();
+		if (this.backdrop) this.updateBackdropProjection();
 	}
 
 	/** Renders one frame, advancing animations by `dtMs`. */
@@ -217,7 +330,17 @@ export class Viewer {
 		this.camera.updateMatrixWorld();
 		this.root.updateMatrixWorld(true);
 		for (const inst of this.instances) inst.update(dtMs * this.timeScale, this.camera);
+		if (!this.backdrop) return this.renderer.render(this.scene, this.camera);
+		this.backdropRoot.updateMatrixWorld(true);
+		this.backdrop.update(dtMs * this.timeScale, this.backdropCamera);
+		// Two passes with the depth buffer cleared between them: the backdrop keeps the depths its own
+		// scene was built at, and the models always draw in front of all of it.
+		this.renderer.autoClear = false;
+		this.renderer.clear();
+		this.renderer.render(this.backdropScene, this.backdropCamera);
+		this.renderer.clearDepth();
 		this.renderer.render(this.scene, this.camera);
+		this.renderer.autoClear = true;
 	}
 
 	start(): void {
@@ -240,6 +363,7 @@ export class Viewer {
 	dispose(): void {
 		this.stop();
 		this.resizeObserver?.disconnect();
+		this.setBackdrop(null);
 		this.clear();
 		this.controls.dispose();
 		this.renderer.dispose();

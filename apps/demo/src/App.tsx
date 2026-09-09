@@ -10,7 +10,7 @@ import {
 	type CharacterItem,
 	type M2Instance,
 } from "@wotlk-viewer/core";
-import { Character, Creature, Model, WowViewer } from "@wotlk-viewer/solid";
+import { Backdrop, Character, Creature, Model, WowViewer } from "@wotlk-viewer/solid";
 // Type-only, so the server package is erased from the browser bundle.
 import type { CharacterDetails, CharacterSummary } from "@wotlk-viewer/server";
 
@@ -69,6 +69,7 @@ export function App(): JSX.Element {
 	const [dbCharacter, setDbCharacter] = createSignal<CharacterDetails | null>(null);
 	const [showTransmog, setShowTransmog] = createSignal(true);
 	const [showPet, setShowPet] = createSignal(true);
+	const [showBackground, setShowBackground] = createSignal(true);
 
 	const [races] = createResource(() => gameData.races());
 	const [animNames] = createResource(() => gameData.animationNames());
@@ -336,6 +337,14 @@ export function App(): JSX.Element {
 							/>{" "}
 							Pet
 						</label>
+						<label>
+							<input
+								type="checkbox"
+								checked={showBackground()}
+								onChange={(e) => setShowBackground(e.currentTarget.checked)}
+							/>{" "}
+							Background
+						</label>
 					</div>
 
 					<h2>Equipment (item entries)</h2>
@@ -375,6 +384,10 @@ export function App(): JSX.Element {
 			<main class="viewport">
 				{/* `window.viewer` is exposed for poking at the scene from the devtools console. */}
 				<WowViewer ref={(v) => ((window as unknown as { viewer: unknown }).viewer = v)}>
+					{/* The race's character-creation scene; it keeps its own camera and never orbits. */}
+					<Show when={mode() === "character" && showBackground()}>
+						<Backdrop assets={assets} gameData={gameData} race={appearance.race} onError={onError} />
+					</Show>
 					<Show when={mode() === "character"}>
 						<Character
 							assets={assets}

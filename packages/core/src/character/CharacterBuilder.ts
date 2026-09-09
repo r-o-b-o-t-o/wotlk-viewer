@@ -5,10 +5,12 @@ import { M2Instance } from "../render/M2Instance.js";
 import type { M2Lighting } from "../render/M2Material.js";
 import { canvasToTexture } from "../render/textures.js";
 import {
+	AnimationId,
 	AttachmentId,
 	CharRegion,
 	CharSectionType,
 	EquipmentSlot,
+	FINGER_KEY_BONES,
 	Gender,
 	GeosetGroup,
 	InventoryType,
@@ -382,7 +384,38 @@ export class CharacterBuilder {
 			);
 		}
 		await Promise.all(attachments);
+		await this.closeHands(body, taken);
 		return body;
+	}
+
+	/**
+	 * Curls the fingers of a hand that carries something. The body keeps playing its own animation, so
+	 * only the finger bones are posed from HandsClosed, as the game does.
+	 */
+	private async closeHands(body: M2Instance, taken: Set<AttachmentId>): Promise<void> {
+		const hands = [
+			taken.has(AttachmentId.HandRight),
+			taken.has(AttachmentId.HandLeft) || taken.has(AttachmentId.Shield),
+		];
+		if (!hands[0] && !hands[1]) return;
+		const seq = body.model.findSequence(AnimationId.HandsClosed);
+		if (seq < 0) return;
+		const { m2 } = body.model;
+		const flags = new Uint8Array(m2.bones.length);
+		hands.forEach((held, hand) => {
+			if (!held) return;
+			for (const key of FINGER_KEY_BONES[hand]) {
+				const bone = m2.keyBoneLookup[key];
+				if (bone >= 0 && bone < flags.length) flags[bone] = 1;
+			}
+		});
+		// Bones are stored parents first, so one pass picks up every joint below a finger root.
+		for (let i = 0; i < m2.bones.length; i++) {
+			const parent = m2.bones[i].parentBone;
+			if (parent >= 0 && flags[parent]) flags[i] = 1;
+		}
+		await this.assets.loadSequence(body.model, seq);
+		body.animator.setBoneOverride(seq, flags);
 	}
 
 	private async resolveItems(items: CharacterItem[]): Promise<ResolvedItem[]> {

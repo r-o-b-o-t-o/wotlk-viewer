@@ -49,6 +49,9 @@ export class M2Animator {
 	onFinished: (() => void) | null = null;
 
 	private readonly localMatrices: Matrix4[];
+	/** One flag per bone: those set are posed from `overrideSequence` instead. */
+	private overrideBones: Uint8Array | null = null;
+	private overrideSequence = 0;
 
 	constructor(readonly model: M2Model) {
 		const m2 = model.m2;
@@ -68,6 +71,15 @@ export class M2Animator {
 		this.time = 0;
 		this.loop = loop;
 		this.playing = true;
+	}
+
+	/**
+	 * Keeps the flagged bones on another sequence while the main one plays; the game grips weapons by
+	 * posing the fingers from HandsClosed like this. `bones` holds one flag per bone, null to clear.
+	 */
+	setBoneOverride(sequence: number, bones: Uint8Array | null): void {
+		this.overrideBones = bones;
+		this.overrideSequence = this.model.resolveAlias(sequence);
 	}
 
 	/** Advances time by `dtMs` and re-evaluates every animated property. */
@@ -114,8 +126,8 @@ export class M2Animator {
 
 	private evaluateBones(billboard?: BillboardBasis): void {
 		const { m2 } = this.model;
-		const seq = this.sequence;
 		for (let i = 0; i < m2.bones.length; i++) {
+			const seq = this.overrideBones?.[i] ? this.overrideSequence : this.sequence;
 			const bone = m2.bones[i];
 			const local = this.localMatrices[i];
 			const tKeys = this.model.keys(bone.translation, seq, "vec3");

@@ -136,6 +136,8 @@ Any other backend works as long as it implements `DataSource` (`readFile`, optio
 4. Hair texture (texture type 6), cape (type 2) and monster textures are bound to the M2's replaceable slots.
 5. Helm (`_<RacePrefix><M|F>` variant), shoulders, weapons and shields are loaded as separate `M2Instance`s and
    attached to the body's attachment points; they animate on their own.
+6. A hand that carries something has its finger bones posed from the `HandsClosed` animation while the body keeps
+   playing its own, so the grip closes around the weapon.
 
 Rendering uses one draw group per skin batch with a small custom shader (1–2 texture layers, WoW blend modes,
 vertex color / alpha / UV-transform tracks, ambient + directional light in gamma space like the original client).

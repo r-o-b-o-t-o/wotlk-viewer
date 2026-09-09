@@ -176,6 +176,12 @@ export const ITEM_TEXTURE_SLOTS: { folder: string; region: CharRegion }[] = [
 	{ folder: "FootTexture", region: CharRegion.Foot },
 ];
 
+/** KeyBoneLookup indices of the five finger bones of each hand, right first. */
+export const FINGER_KEY_BONES: [number[], number[]] = [
+	[8, 9, 10, 11, 12],
+	[13, 14, 15, 16, 17],
+];
+
 /** Well-known animation ids (AnimationData.dbc). */
 export const AnimationId = {
 	Stand: 0,

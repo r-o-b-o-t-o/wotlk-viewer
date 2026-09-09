@@ -34,6 +34,8 @@ export interface M2MaterialOptions {
 	flags: number;
 	textureCount: number;
 	texCoords: [TexCoordSource, TexCoordSource];
+	/** How the second texture layer combines with the first (see M2Combiner). */
+	combiner: number;
 }
 
 /** Scene lighting shared by all M2 materials. */
@@ -82,6 +84,7 @@ uniform sampler2D uTex0;
 uniform sampler2D uTex1;
 uniform vec4 uColor;
 uniform int uTexCount;
+uniform int uCombiner;
 uniform float uAlphaTest;
 uniform bool uOpaque;
 uniform bool uUnlit;
@@ -97,9 +100,19 @@ void main() {
   vec3 rgb = t0.rgb * uColor.rgb;
   float a = (uOpaque ? 1.0 : t0.a) * uColor.a;
   if (uTexCount > 1) {
+    // Layer one is always a modulate here; the second layer's op comes from the model (M2Combiner).
+    // The "NA" variants differ only in leaving the alpha of the first layer alone.
     vec4 t1 = texture2D(uTex1, vUv1);
-    rgb *= t1.rgb;
-    a *= t1.a;
+    if (uCombiner == 3 || uCombiner == 7) {   // Add, AddNA
+      rgb += t1.rgb;
+      if (uCombiner == 3) a += t1.a;
+    } else if (uCombiner == 4 || uCombiner == 6) {  // Mod2x, Mod2xNA
+      rgb *= t1.rgb * 2.0;
+      if (uCombiner == 4) a *= t1.a * 2.0;
+    } else {                                  // Mod, Opaque and anything not modelled
+      rgb *= t1.rgb;
+      if (uCombiner != 0) a *= t1.a;
+    }
   }
   if (a < uAlphaTest) discard;
   if (!uUnlit) {
@@ -163,6 +176,7 @@ export class M2Material extends ShaderMaterial {
 				uTexCoord0: { value: opts.texCoords[0] },
 				uTexCoord1: { value: opts.texCoords[1] },
 				uTexCount: { value: opts.textureCount },
+				uCombiner: { value: opts.combiner },
 				uColor: { value: new Vector4(1, 1, 1, 1) },
 				uAlphaTest: { value: alphaTestFor(blendMode) },
 				uOpaque: { value: blendMode === M2BlendMode.Opaque },

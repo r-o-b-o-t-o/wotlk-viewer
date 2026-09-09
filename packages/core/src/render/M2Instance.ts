@@ -1,7 +1,7 @@
 import { Bone, Camera, DetachedBindMode, Matrix4, Object3D, Skeleton, SkinnedMesh, Texture, Vector3 } from "three";
 import type { AssetManager } from "../AssetManager.js";
 import { M2Animator, type BillboardBasis } from "../animation/M2Animator.js";
-import { M2TextureType, type M2Attachment } from "../formats/m2.js";
+import { M2Combiner, M2TextureType, type M2Attachment } from "../formats/m2.js";
 import { M2Material, TexCoordSource, type M2Lighting } from "./M2Material.js";
 import type { M2Model } from "./M2Model.js";
 import { ParticleSystem } from "./ParticleSystem.js";
@@ -73,12 +73,15 @@ export class M2Instance extends Object3D {
 				const unit = m2.textureUnitLookup[b.textureCoordComboIndex + i];
 				coords[i] = unit < 0 ? TexCoordSource.Env : unit === 1 ? TexCoordSource.Uv1 : TexCoordSource.Uv0;
 			}
+			// The batch's shader id names a combiner per layer; without the override array the client
+			// modulates, which is what a missing entry falls back to.
 			return new M2Material(
 				{
 					blendMode: mat.blendMode,
 					flags: mat.flags,
 					textureCount: Math.min(b.textureCount, 2),
 					texCoords: coords,
+					combiner: m2.textureCombinerCombos[b.shaderId + 1] ?? M2Combiner.Mod,
 				},
 				lighting,
 				assets.whiteTexture,

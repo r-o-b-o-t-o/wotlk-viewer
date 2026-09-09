@@ -162,11 +162,10 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Translucent batches of one model are drawn in file order, with additive glow decals forced last, instead of being
   depth-sorted per submesh: every batch of a mesh shares one sort key in three.js. Models whose translucent layers
   need another order can still stack wrongly.
-- Two-texture batches always use a multiply combiner. The second layer really has its own material, and every
-  two-texture batch in the client's item models sits in a model with `globalFlags & 0x8`, which means that material
-  comes from the "second texture material override" block indexed by the batch's shader id rather than from
-  `materialIndex + 1`. That block is not parsed, so detail and env-map layers can look off. Batches never carry
-  more than two textures.
+- The second texture layer's combiner comes from `textureCombinerCombos`, indexed by the batch's shader id. The
+  first layer's op is assumed to be a modulate, which holds on all but two of the client's item batches, and the
+  Decal, Fade and Envmap ops are not modelled and fall back to a modulate. Batches never carry more than two
+  textures.
 - Particle `zSource`, which aims the emission away from a point on the emitter's Z axis, is deliberately skipped.
   It reaches about 14 base models, nearly all rifles and shotguns firing a muzzle flash, and was triaged as not
   worth the code.

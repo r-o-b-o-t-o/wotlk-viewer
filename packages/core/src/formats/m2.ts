@@ -116,6 +116,24 @@ export const M2MaterialFlags = {
 	DepthWriteOff: 0x10,
 } as const;
 
+export const M2GlobalFlags = {
+	/** Adds the `textureCombinerCombos` array to the end of the header. */
+	UseTextureCombinerCombos: 0x8,
+} as const;
+
+/** Texture combiner ops (EGxTexBlend). A batch's shader id names one per texture layer. */
+export const M2Combiner = {
+	Opaque: 0,
+	Mod: 1,
+	Decal: 2,
+	Add: 3,
+	Mod2x: 4,
+	Fade: 5,
+	Mod2xNa: 6,
+	AddNa: 7,
+	Envmap: 8,
+} as const;
+
 export const M2BlendMode = {
 	Opaque: 0,
 	AlphaKey: 1,
@@ -157,6 +175,8 @@ export interface M2Data {
 	textureTransformLookup: Int16Array;
 	boundingBox: { min: [number, number, number]; max: [number, number, number] };
 	boundingSphereRadius: number;
+	/** Combiner op per texture layer, indexed by a batch's shader id; empty without the global flag. */
+	textureCombinerCombos: Uint16Array;
 	attachments: M2Attachment[];
 	attachmentLookup: Int16Array;
 	particleEmitters: M2ParticleEmitter[];
@@ -523,6 +543,9 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 	const attachmentLookup = readArray(r);
 	r.skip(8 * 5); // events, lights, cameras, camera lookup, ribbons: unused
 	const particles = readArray(r);
+	// Only present with the global flag, and always last, so nothing else shifts when it is absent.
+	const combinerCombos =
+		globalFlags & M2GlobalFlags.UseTextureCombinerCombos ? readArray(r) : { count: 0, offset: 0 };
 
 	const i16 = (a: M2Array) => r.i16ArrayAt(a.offset, a.count);
 	const u16 = (a: M2Array) => r.u16ArrayAt(a.offset, a.count);
@@ -566,6 +589,7 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 			const position = r.vec3();
 			return { id, bone, position, animateAttached: readTrack(r) };
 		}),
+		textureCombinerCombos: u16(combinerCombos),
 		attachmentLookup: i16(attachmentLookup),
 		particleEmitters: readList(r, particles, 476, readParticle),
 		reader: r,

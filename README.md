@@ -162,8 +162,11 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Translucent batches of one model are drawn in file order, with additive glow decals forced last, instead of being
   depth-sorted per submesh: every batch of a mesh shares one sort key in three.js. Models whose translucent layers
   need another order can still stack wrongly.
-- Two-texture batches always use a multiply combiner and pre-Cataclysm shader ids are not decoded, so additive
-  detail layers can look slightly off. Batches with more than two textures use the first two.
+- Two-texture batches always use a multiply combiner. The second layer really has its own material, and every
+  two-texture batch in the client's item models sits in a model with `globalFlags & 0x8`, which means that material
+  comes from the "second texture material override" block indexed by the batch's shader id rather than from
+  `materialIndex + 1`. That block is not parsed, so detail and env-map layers can look off. Batches never carry
+  more than two textures.
 - Bezier tracks are treated as hermite.
 - Sequence switching is instant (no `blendTime` cross-fade) and Stand variations are not randomized (always variation 0
   unless you pass one).

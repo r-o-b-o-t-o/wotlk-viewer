@@ -37,15 +37,14 @@ void main() {
 }
 `;
 
-// Particle state layout: x y z vx vy vz age life cell scaleMul (cell < 0 = follow the head cell track)
-const STRIDE = 10;
+// Particle state layout: x y z vx vy vz age life cell scaleMul spin spinRate
+// (cell < 0 = follow the head cell track; spin is the angle at birth, in radians)
+const STRIDE = 12;
 // Quad corners as (right, up, cellU, cellV): (-r,+u) (+r,+u) (+r,-u) (-r,-u).
 const CORNERS = new Int8Array([-1, 1, 0, 0, 1, 1, 1, 0, 1, -1, 1, 1, -1, -1, 0, 1]);
 const tmpV = new Float32Array(4);
 const tmpPos = new Vector3();
 const tmpDir = new Vector3();
-const tmpRight = new Vector3();
-const tmpUp = new Vector3();
 
 /** Samples a life-fraction keyed track, falling back to a constant when it has no keys. */
 function samplePart(track: M2PartTrack, t: number, out: Float32Array, fallback: number): void {
@@ -58,7 +57,7 @@ function samplePart(track: M2PartTrack, t: number, out: Float32Array, fallback: 
 
 /**
  * CPU-simulated M2 particle emitter rendered as camera-facing quads in model space.
- * Simplified: no tails, spin, tumble, wind or ParticleColor.dbc overrides.
+ * Simplified: no tails, tumble, wind or ParticleColor.dbc overrides.
  */
 export class ParticleSystem {
 	readonly mesh: Mesh;
@@ -201,6 +200,8 @@ export class ParticleSystem {
 		p[o + 8] =
 			e.flags & M2ParticleFlags.RandomTexture ? Math.floor(Math.random() * e.textureRows * e.textureCols) : -1;
 		p[o + 9] = 1 + e.scaleVary[0] * rand2();
+		p[o + 10] = e.baseSpin + e.baseSpinVary * rand2();
+		p[o + 11] = e.spin + e.spinVary * rand2();
 	}
 
 	private buildQuads(basis: BillboardBasis): void {
@@ -235,20 +236,24 @@ export class ParticleSystem {
 			const cu = (cell % cols) / cols;
 			const cv = Math.floor(cell / cols) / rows;
 
-			tmpRight.copy(basis.right).multiplyScalar(sx);
-			tmpUp.copy(basis.up).multiplyScalar(sy);
+			// The quad spins in its own plane, so the corner is rotated before the camera basis maps it out.
+			const angle = p[o + 10] + p[o + 11] * p[o + 6];
+			const cos = Math.cos(angle),
+				sin = Math.sin(angle);
 			const x = p[o],
 				y = p[o + 1],
 				z = p[o + 2];
 			const v = i * 4;
 			for (let c = 0; c < 4; c++) {
 				const k = c * 4;
-				const cr = CORNERS[k],
-					cuF = CORNERS[k + 1];
+				const ox = CORNERS[k] * sx,
+					oy = CORNERS[k + 1] * sy;
+				const rx = ox * cos - oy * sin,
+					ry = ox * sin + oy * cos;
 				const vi = (v + c) * 3;
-				pos[vi] = x + tmpRight.x * cr + tmpUp.x * cuF;
-				pos[vi + 1] = y + tmpRight.y * cr + tmpUp.y * cuF;
-				pos[vi + 2] = z + tmpRight.z * cr + tmpUp.z * cuF;
+				pos[vi] = x + basis.right.x * rx + basis.up.x * ry;
+				pos[vi + 1] = y + basis.right.y * rx + basis.up.y * ry;
+				pos[vi + 2] = z + basis.right.z * rx + basis.up.z * ry;
 				uv[(v + c) * 2] = cu + CORNERS[k + 2] / cols;
 				uv[(v + c) * 2 + 1] = cv + CORNERS[k + 3] / rows;
 				const ci = (v + c) * 4;

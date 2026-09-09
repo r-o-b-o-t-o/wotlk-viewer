@@ -35,6 +35,21 @@ server CLI through `--env-file-if-exists`.
 - `AZEROTHCORE_SRC`, `MYSQL_CLI` — pointers no code reads. The AzerothCore source explains the
   schema; do not mirror its data layout, the library takes whatever shape a REST API returns.
 
+## Format reference
+
+wowdev.wiki documents the file formats. `WebFetch` gets a 403 there; `curl -A` with a browser
+user agent works.
+
+- https://wowdev.wiki/M2 — header layout, particle emitters, and the flag tables
+- https://wowdev.wiki/M2/Rendering — blend modes, and the combiners with their exact per-op formulas
+- https://wowdev.wiki/DB/ParticleColor — how a display's `ParticleColorID` recolours emitters
+- https://wowdev.wiki/DB/ItemDisplayInfo — column list
+- https://wowdev.wiki/BLS — compiled shader container; needs a decompiler, no use found for it yet
+
+Look a flag or field up rather than guessing: several names here started as guesses and were wrong.
+Then check the reading against the whole client before building on it — a tally over every model
+catches a misreading that one model will happily agree with.
+
 ## Working on it
 
 `npm run dev` (Vite, port 5173) serves the demo plus `/data` and `/api`.

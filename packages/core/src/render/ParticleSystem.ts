@@ -164,11 +164,11 @@ export class ParticleSystem {
 		const azimuth = animator.sampleScalar(e.horizontalRange, "float", 0) * rand2();
 
 		if (e.emitterType === 2) {
-			// Sphere: spawn on a shell between the two radii, moving outwards.
+			// Sphere: spawn on a shell between the two radii and travel along that radius. The sign of
+			// the emission speed decides the way, so shield glows with a negative speed converge inwards.
 			tmpDir.set(Math.cos(polar) * Math.cos(azimuth), Math.cos(polar) * Math.sin(azimuth), Math.sin(polar));
 			const radius = length + (width - length) * Math.random();
 			tmpPos.copy(tmpDir).multiplyScalar(radius);
-			if (!(e.flags & M2ParticleFlags.Outward)) tmpDir.set(0, 0, 1);
 		} else {
 			// Plane: spawn in a rectangle, moving along +Z within the given cone. The "width" runs along the
 			// bone's X axis (weapon glows span the blade with it), the "length" along Y.

@@ -155,6 +155,9 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath
   attachments derived from `Item.dbc` `SheatheType`, and held off-hand items disappear, like in the game.
   Combining both gives the ranged stance: bow in hand, melee gear stowed.
+- Translucent batches of one model are drawn in file order, with additive glow decals forced last, instead of being
+  depth-sorted per submesh: every batch of a mesh shares one sort key in three.js. Models whose translucent layers
+  need another order can still stack wrongly.
 - Two-texture batches always use a multiply combiner and pre-Cataclysm shader ids are not decoded, so additive
   detail layers can look slightly off. Batches with more than two textures use the first two.
 - Bezier tracks are treated as hermite.

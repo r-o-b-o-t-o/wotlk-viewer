@@ -176,9 +176,9 @@ export class ParticleSystem {
 			const radius = length + (width - length) * Math.random();
 			tmpPos.copy(tmpDir).multiplyScalar(radius);
 		} else {
-			// Plane: spawn in a rectangle, moving along +Z within the given cone. The "width" runs along the
-			// bone's X axis (weapon glows span the blade with it), the "length" along Y.
-			tmpPos.set(width * (Math.random() - 0.5), length * (Math.random() - 0.5), 0);
+			// Plane: spawn in a rectangle, moving along +Z within the given cone. The length runs along the
+			// bone's X axis (weapon glows span the blade with it), the width along Y.
+			tmpPos.set(length * (Math.random() - 0.5), width * (Math.random() - 0.5), 0);
 			tmpDir.set(Math.sin(polar) * Math.cos(azimuth), Math.sin(polar) * Math.sin(azimuth), Math.cos(polar));
 		}
 		tmpPos.x += e.position[0];

@@ -190,7 +190,7 @@ export interface M2ParticleEmitter {
 	particleColorIndex: number;
 	particleType: number;
 	headOrTail: number;
-	textureTileRotation: number;
+	priorityPlane: number;
 	textureRows: number;
 	textureCols: number;
 	emissionSpeed: M2Track;
@@ -202,8 +202,10 @@ export interface M2ParticleEmitter {
 	lifespanVary: number;
 	emissionRate: M2Track;
 	emissionRateVary: number;
-	emissionAreaLength: M2Track;
+	/** Plane: the rectangle's extent along the bone's Y. Sphere: the outer radius. */
 	emissionAreaWidth: M2Track;
+	/** Plane: the rectangle's extent along the bone's X. Sphere: the inner radius. */
+	emissionAreaLength: M2Track;
 	zSource: M2Track;
 	alpha: M2PartTrack; // 1 comp
 	color: M2PartTrack; // 3 comps, 0..255
@@ -215,7 +217,7 @@ export interface M2ParticleEmitter {
 	twinkleSpeed: number;
 	twinklePercent: number;
 	twinkleScale: [number, number];
-	burstMultiplier: number;
+	inheritVelocityScale: number;
 	drag: number;
 	baseSpin: number;
 	baseSpinVary: number;
@@ -233,19 +235,44 @@ export interface M2ParticleEmitter {
 }
 
 export const M2ParticleFlags = {
-	Lit: 0x1,
-	WorldUp: 0x8,
-	DoNotTrail: 0x10,
-	Unlit: 0x20,
-	UseBurstMultiplier: 0x40,
-	ModelSpace: 0x80,
-	RandomizedSpawn: 0x200,
-	Pinned: 0x400,
+	/** Lit by the scene; the client keeps this bit inverted in its material. */
+	Shaded: 0x1,
+	SortParticles: 0x2,
+	/** Billboard aligns along the velocity vector. */
+	VelocityOrient: 0x4,
+	Unfogged: 0x8,
+	/** Simulated in world space, skipping the bone transform. */
+	WorldSpace: 0x10,
+	InheritBoneScale: 0x20,
+	InheritVelocity: 0x40,
+	/** Kills particles moving away from the centre. */
+	ImplosionFilter: 0x80,
+	HemisphereUpDirection: 0x100,
+	/** Half the particles spin the other way. */
+	NegateSpinRandom: 0x200,
+	/** Tail reaches back at most as far as the particle has lived. */
+	ClampTailToAge: 0x400,
+	InheritPosition: 0x800,
 	XyQuad: 0x1000,
-	ClampToGround: 0x2000,
-	RandomTexture: 0x10000,
-	Outward: 0x20000,
-	RandomFlipbookStart: 0x200000,
+	ProjectParticle: 0x2000,
+	FollowPosition: 0x4000,
+	/** Emits only while the emission rate track is above zero. */
+	Squirt: 0x8000,
+	ChooseRandomTexture: 0x10000,
+	/** Draw a camera-facing quad. */
+	HeadStyle: 0x20000,
+	/** Draw a quad stretched back along the direction of travel. */
+	TailStyle: 0x40000,
+	/** ScaleVary drives x and y independently rather than uniformly from x. */
+	UnscaledSizeVariation: 0x80000,
+	Refraction: 0x100000,
+	RandFlipbookStart: 0x200000,
+	CompressedGravity: 0x800000,
+	BoneGeneratorBone: 0x1000000,
+	NoGlobalViewScale: 0x2000000,
+	LodIgnoreDistance: 0x4000000,
+	OffsetHeadBySpin: 0x8000000,
+	MultiTexture: 0x10000000,
 } as const;
 
 const readArray = (r: BinaryReader): M2Array => ({ count: r.u32(), offset: r.u32() });
@@ -301,7 +328,7 @@ const readParticle = (r: BinaryReader): M2ParticleEmitter => {
 	const particleColorIndex = r.u16();
 	const particleType = r.u8();
 	const headOrTail = r.u8();
-	const textureTileRotation = r.i16();
+	const priorityPlane = r.i16();
 	const textureRows = r.u16();
 	const textureCols = r.u16();
 	const emissionSpeed = readTrack(r);
@@ -313,8 +340,8 @@ const readParticle = (r: BinaryReader): M2ParticleEmitter => {
 	const lifespanVary = r.f32();
 	const emissionRate = readTrack(r);
 	const emissionRateVary = r.f32();
-	const emissionAreaLength = readTrack(r);
 	const emissionAreaWidth = readTrack(r);
+	const emissionAreaLength = readTrack(r);
 	const zSource = readTrack(r);
 	const color = readPartTrack(r, 3, "float");
 	const alpha = readPartTrack(r, 1, "fixed16");
@@ -326,7 +353,7 @@ const readParticle = (r: BinaryReader): M2ParticleEmitter => {
 	const twinkleSpeed = r.f32();
 	const twinklePercent = r.f32();
 	const twinkleScale: [number, number] = [r.f32(), r.f32()];
-	const burstMultiplier = r.f32();
+	const inheritVelocityScale = r.f32();
 	const drag = r.f32();
 	const baseSpin = r.f32();
 	const baseSpinVary = r.f32();
@@ -353,7 +380,7 @@ const readParticle = (r: BinaryReader): M2ParticleEmitter => {
 		particleColorIndex,
 		particleType,
 		headOrTail,
-		textureTileRotation,
+		priorityPlane,
 		textureRows,
 		textureCols,
 		emissionSpeed,
@@ -365,8 +392,8 @@ const readParticle = (r: BinaryReader): M2ParticleEmitter => {
 		lifespanVary,
 		emissionRate,
 		emissionRateVary,
-		emissionAreaLength,
 		emissionAreaWidth,
+		emissionAreaLength,
 		zSource,
 		alpha,
 		color,
@@ -378,7 +405,7 @@ const readParticle = (r: BinaryReader): M2ParticleEmitter => {
 		twinkleSpeed,
 		twinklePercent,
 		twinkleScale,
-		burstMultiplier,
+		inheritVelocityScale,
 		drag,
 		baseSpin,
 		baseSpinVary,

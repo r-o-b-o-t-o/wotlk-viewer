@@ -20,6 +20,7 @@ interface AttachedChild {
 const IDENTITY_BIND = new Matrix4();
 const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
+const tmpWorldUp = new Vector3();
 // Right-handed like a camera basis (right x up = back), so quads are not mirrored without a camera.
 const DEFAULT_BASIS: BillboardBasis = {
 	right: new Vector3(0, 1, 0),
@@ -219,9 +220,14 @@ export class M2Instance extends Object3D {
 		this.updateMaterials();
 
 		const boneMatrices = this.animator.boneMatrices;
+		if (this.particles.length > 0) {
+			// World up in this instance's own space, for emitters that aim along it instead of their bone.
+			// `Viewer.root` turns WoW's Z-up into the scene's Y-up, so the scene's +Y is that direction.
+			tmpWorldUp.set(0, 1, 0).transformDirection(tmpMat.copy(this.matrixWorld).invert());
+		}
 		for (const ps of this.particles) {
 			const bone = boneMatrices[ps.emitter.bone] ?? IDENTITY_BIND;
-			ps.update(dtMs / 1000, this.animator, bone, basis ?? DEFAULT_BASIS);
+			ps.update(dtMs / 1000, this.animator, bone, basis ?? DEFAULT_BASIS, tmpWorldUp);
 		}
 
 		for (const { instance, attachment } of this.attached) {

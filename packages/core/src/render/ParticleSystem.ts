@@ -113,13 +113,21 @@ export class ParticleSystem {
 		this.material.uniforms.uTex.value = texture;
 	}
 
-	/** Simulates `dt` seconds and rebuilds the quads. `bone` is the emitter bone's model-space matrix. */
-	update(dt: number, animator: M2Animator, bone: Matrix4, basis: BillboardBasis): void {
+	/**
+	 * Simulates `dt` seconds and rebuilds the quads. `bone` is the emitter bone's model-space matrix,
+	 * `up` the world up axis in that same space, which gravity follows for WorldUp emitters.
+	 */
+	update(dt: number, animator: M2Animator, bone: Matrix4, basis: BillboardBasis, up: Vector3): void {
 		const e = this.emitter;
 		const p = this.particles;
 
-		// Age and move existing particles (gravity along model -Z).
-		const gravity = animator.sampleScalar(e.gravity, "float", 0);
+		// Gravity pulls along the model's -Z, or along world down where the emitter is flagged WorldUp:
+		// an attached weapon is rotated, so its own -Z is not down.
+		const g = animator.sampleScalar(e.gravity, "float", 0) * dt;
+		const worldUp = (e.flags & M2ParticleFlags.WorldUp) !== 0;
+		const gx = worldUp ? -up.x * g : 0;
+		const gy = worldUp ? -up.y * g : 0;
+		const gz = worldUp ? -up.z * g : -g;
 		const drag = Math.max(0, 1 - e.drag * dt);
 		for (let i = 0; i < this.count;) {
 			const o = i * STRIDE;
@@ -129,10 +137,9 @@ export class ParticleSystem {
 				p.copyWithin(o, this.count * STRIDE, this.count * STRIDE + STRIDE);
 				continue;
 			}
-			p[o + 5] -= gravity * dt;
-			p[o + 3] *= drag;
-			p[o + 4] *= drag;
-			p[o + 5] *= drag;
+			p[o + 3] = (p[o + 3] + gx) * drag;
+			p[o + 4] = (p[o + 4] + gy) * drag;
+			p[o + 5] = (p[o + 5] + gz) * drag;
 			p[o] += p[o + 3] * dt;
 			p[o + 1] += p[o + 4] * dt;
 			p[o + 2] += p[o + 5] * dt;

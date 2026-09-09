@@ -151,9 +151,9 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Particle emitters use a simplified CPU simulation: head and tail quads with spin, but no tumble, wind or spline
   emitters. Ribbon emitters are not rendered. The head/tail choice comes from the `HeadStyle` and `TailStyle` flags,
   not the `HeadOrTail` byte, which is 0 on every 3.3.5a emitter.
-- `ParticleColor.dbc` recolouring follows `ItemDisplayInfo.ParticleColorID`, so it reaches item models only;
-  `CreatureDisplayInfo` carries the same field and `CreatureBuilder` does not read it. Only 38 items are affected,
-  all shoulders, since an emitter also has to ask for a colour set with a `particleColorIndex` of 11, 12 or 13.
+- `ParticleColor.dbc` recolouring follows the `ParticleColorID` on `ItemDisplayInfo` and `CreatureDisplayInfo`. An
+  emitter also has to ask for a colour set with a `particleColorIndex` of 11, 12 or 13, which narrows it to 38 items
+  (all shoulders) and 381 creature displays.
 - Enchant visuals (`ItemVisuals.dbc`) are not shown.
 - A ranged weapon is only drawn on request (`drawRanged: true`), held in the left hand and the only thing held;
   the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath

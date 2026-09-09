@@ -27,6 +27,11 @@ export class CreatureBuilder {
 				}
 			}),
 		);
+		// Some displays recolour the model's particles; the DBC is only read when one asks for it.
+		if (cdi.particleColorId) {
+			const row = (await this.data.particleColors()).get(cdi.particleColorId);
+			if (row) inst.setParticleColors(row.colors);
+		}
 		if (cdi.scale > 0) inst.scale.setScalar(cdi.scale);
 		return inst;
 	}

@@ -21,6 +21,8 @@ export interface CreatureDisplayInfo {
 	extendedDisplayInfoId: number;
 	scale: number;
 	textureVariation: [string, string, string];
+	/** ParticleColor.dbc row recolouring this display's particles; 0 for none. */
+	particleColorId: number;
 }
 
 export interface CreatureModelData {
@@ -143,6 +145,7 @@ export class GameData {
 					extendedDisplayInfoId: d.uint(i, 3),
 					scale: d.float(i, 4),
 					textureVariation: [d.string(i, 6), d.string(i, 7), d.string(i, 8)] as [string, string, string],
+					particleColorId: d.uint(i, 13),
 				})),
 			),
 		);

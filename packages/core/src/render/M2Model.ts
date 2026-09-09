@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry } from "three";
 import { BinaryReader } from "../io/BinaryReader.js";
-import { M2SequenceFlags, type M2Data, type M2Track } from "../formats/m2.js";
+import { M2BlendMode, M2SequenceFlags, type M2Data, type M2Track } from "../formats/m2.js";
 import type { SkinData } from "../formats/skin.js";
 import { readTrackKeys, type TrackKeys, type TrackKind } from "../animation/tracks.js";
 
@@ -145,11 +145,17 @@ function buildGeometry(m2: M2Data, skin: SkinData): BufferGeometry {
 	g.setAttribute("skinIndex", new BufferAttribute(skinIndex, 4));
 	g.setAttribute("skinWeight", new BufferAttribute(skinWeight, 4));
 	g.setIndex(new BufferAttribute(skin.indices, 1));
-	// One draw group per batch; instances map group i to their material i.
-	skin.batches.forEach((b, i) => {
-		const sm = skin.submeshes[b.submeshIndex];
+	// One draw group per batch; instances map group i to their material i. Groups of a single mesh keep
+	// this order, so additive batches go last: they are glow decals, and a translucent layer over the
+	// surface behind them would otherwise paint them out (the rune on Titansteel Shield Wall).
+	const isGlow = (i: number) => {
+		const mode = m2.materials[skin.batches[i].materialIndex].blendMode;
+		return mode === M2BlendMode.Add || mode === M2BlendMode.NoAlphaAdd ? 1 : 0;
+	};
+	for (const i of skin.batches.map((_, i) => i).sort((a, b) => isGlow(a) - isGlow(b))) {
+		const sm = skin.submeshes[skin.batches[i].submeshIndex];
 		g.addGroup(sm.indexStart, sm.indexCount, i);
-	});
+	}
 	g.computeBoundingSphere();
 	return g;
 }

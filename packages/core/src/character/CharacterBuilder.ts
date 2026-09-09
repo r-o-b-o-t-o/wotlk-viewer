@@ -234,7 +234,9 @@ export class CharacterBuilder {
 		if (head) {
 			const vis = helmetVis.get(head.display.helmetGeosetVis[sex]);
 			if (vis) {
-				const bit = 1 << (race - 1);
+				// Bit `race`, leaving bit 0 unused: the masks that spare a tauren's mane or a night elf's
+				// ears only line up with the races they are named after this way.
+				const bit = 1 << race;
 				const hides = (i: number) => (vis.hideGeoset[i] & bit) !== 0;
 				if (hides(0)) {
 					groups.set(GeosetGroup.Hair, 1);

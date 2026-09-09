@@ -71,7 +71,7 @@ export interface ItemDisplayInfo {
 
 export interface HelmetGeosetVisData {
 	id: number;
-	/** Race bitmasks (bit race-1) for: hair, facial1, facial2, facial3, ears, misc, eyes. */
+	/** Race bitmasks (bit `race`) for: hair, facial1, facial2, facial3, ears, misc, eyes. */
 	hideGeoset: number[];
 }
 

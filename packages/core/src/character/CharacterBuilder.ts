@@ -338,6 +338,7 @@ export class CharacterBuilder {
 					`${stripExt(d.leftModel)}_${prefix}`,
 					d.leftModelTexture,
 					AttachmentId.Helm,
+					d.particleColorId,
 				),
 			);
 		}
@@ -346,11 +347,25 @@ export class CharacterBuilder {
 			const d = shoulders.display;
 			if (d.leftModel)
 				attachments.push(
-					this.attachItem(body, "Shoulder", d.leftModel, d.leftModelTexture, AttachmentId.ShoulderLeft),
+					this.attachItem(
+						body,
+						"Shoulder",
+						d.leftModel,
+						d.leftModelTexture,
+						AttachmentId.ShoulderLeft,
+						d.particleColorId,
+					),
 				);
 			if (d.rightModel)
 				attachments.push(
-					this.attachItem(body, "Shoulder", d.rightModel, d.rightModelTexture, AttachmentId.ShoulderRight),
+					this.attachItem(
+						body,
+						"Shoulder",
+						d.rightModel,
+						d.rightModelTexture,
+						AttachmentId.ShoulderRight,
+						d.particleColorId,
+					),
 				);
 		}
 		const taken = new Set<AttachmentId>();
@@ -384,7 +399,14 @@ export class CharacterBuilder {
 			}
 			taken.add(attachment);
 			attachments.push(
-				this.attachItem(body, folder, item.display.leftModel, item.display.leftModelTexture, attachment),
+				this.attachItem(
+					body,
+					folder,
+					item.display.leftModel,
+					item.display.leftModelTexture,
+					attachment,
+					item.display.particleColorId,
+				),
 			);
 		}
 		await Promise.all(attachments);
@@ -473,6 +495,7 @@ export class CharacterBuilder {
 		modelName: string,
 		texture: string,
 		attachment: AttachmentId,
+		particleColorId: number,
 	): Promise<void> {
 		const modelPath = objectComponentPath(folder, modelName, "m2");
 		try {
@@ -483,6 +506,11 @@ export class CharacterBuilder {
 					M2TextureType.ObjectSkin,
 					await this.assets.loadTexture(objectComponentPath(folder, texture, "blp")),
 				);
+			}
+			// Some appearances recolour the model's particles; the DBC is only read when one asks for it.
+			if (particleColorId) {
+				const row = (await this.data.particleColors()).get(particleColorId);
+				if (row) inst.setParticleColors(row.colors);
 			}
 			if (!body.attachModel(inst, attachment)) inst.dispose();
 		} catch (e) {

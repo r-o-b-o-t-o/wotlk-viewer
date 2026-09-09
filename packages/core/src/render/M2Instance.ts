@@ -21,6 +21,8 @@ const IDENTITY_BIND = new Matrix4();
 const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
 const tmpWorldUp = new Vector3();
+/** An emitter takes a ParticleColor.dbc set when its index is this, one past it, or two past it. */
+const PARTICLE_COLOR_FIRST_INDEX = 11;
 // Right-handed like a camera basis (right x up = back), so quads are not mirrored without a camera.
 const DEFAULT_BASIS: BillboardBasis = {
 	right: new Vector3(0, 1, 0),
@@ -120,6 +122,29 @@ export class M2Instance extends Object3D {
 			if (t.type === type) this.textures[i] = texture;
 		});
 		this.applyTextures();
+	}
+
+	/**
+	 * Recolours the emitters that ask for it. `colors` is a ParticleColor.dbc row's nine 0xAARRGGBB
+	 * values (start, middle then end, three of each); each emitter's `particleColorIndex` picks one of
+	 * the three sets. Emitters without an index keep their own colours, as does everything on null.
+	 */
+	setParticleColors(colors: ArrayLike<number> | null): void {
+		for (const ps of this.particles) {
+			const set = ps.emitter.particleColorIndex - PARTICLE_COLOR_FIRST_INDEX;
+			if (!colors || set < 0 || set > 2) {
+				ps.setColorOverride(null);
+				continue;
+			}
+			const rgb = new Float32Array(9);
+			for (let key = 0; key < 3; key++) {
+				const c = colors[key * 3 + set];
+				rgb[key * 3] = (c >>> 16) & 0xff;
+				rgb[key * 3 + 1] = (c >>> 8) & 0xff;
+				rgb[key * 3 + 2] = c & 0xff;
+			}
+			ps.setColorOverride(rgb);
+		}
 	}
 
 	hasTextureType(type: number): boolean {

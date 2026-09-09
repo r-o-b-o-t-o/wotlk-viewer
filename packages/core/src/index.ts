@@ -31,6 +31,7 @@ export type {
 	ItemDisplayInfo,
 	HelmetGeosetVisData,
 	ItemRecord,
+	ParticleColorRow,
 	CustomizationOptions,
 } from "./character/GameData.js";
 export { TextureCompositor, blpToCanvas } from "./character/TextureCompositor.js";

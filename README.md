@@ -149,8 +149,11 @@ quaternion and scale tracks, global sequences, external `.anim` files loaded on 
 Things deliberately left out or approximated; worth deciding on if they matter for your use case:
 
 - Particle emitters use a simplified CPU simulation: head and tail quads with spin, but no tumble, wind or spline
-  emitters, and no `ParticleColor.dbc` overrides. Ribbon emitters are not rendered. The head/tail choice comes from
-  the `HeadStyle` and `TailStyle` flags, not the `HeadOrTail` byte, which is 0 on every 3.3.5a emitter.
+  emitters. Ribbon emitters are not rendered. The head/tail choice comes from the `HeadStyle` and `TailStyle` flags,
+  not the `HeadOrTail` byte, which is 0 on every 3.3.5a emitter.
+- `ParticleColor.dbc` recolouring follows `ItemDisplayInfo.ParticleColorID`, so it reaches item models only;
+  `CreatureDisplayInfo` carries the same field and `CreatureBuilder` does not read it. Only 38 items are affected,
+  all shoulders, since an emitter also has to ask for a colour set with a `particleColorIndex` of 11, 12 or 13.
 - Enchant visuals (`ItemVisuals.dbc`) are not shown.
 - A ranged weapon is only drawn on request (`drawRanged: true`), held in the left hand and the only thing held;
   the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath

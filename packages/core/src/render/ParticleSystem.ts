@@ -43,6 +43,8 @@ const STRIDE = 12;
 // Quad corners as (right, up, cellU, cellV): (-r,+u) (+r,+u) (+r,-u) (-r,-u).
 const CORNERS = new Int8Array([-1, 1, 0, 0, 1, 1, 1, 0, 1, -1, 1, 1, -1, -1, 0, 1]);
 const tmpV = new Float32Array(4);
+/** Fallback key times for a colour override when the emitter's own track is not start/middle/end. */
+const DEFAULT_COLOR_TIMES = new Float32Array([0, 0.5, 1]);
 const tmpPos = new Vector3();
 const tmpDir = new Vector3();
 const tmpAcross = new Vector3();
@@ -73,6 +75,8 @@ export class ParticleSystem {
 	private readonly attributes: BufferAttribute[];
 	private count = 0;
 	private emitAccumulator = 0;
+	/** Colour keys in use: the emitter's own, or a ParticleColor.dbc override. */
+	private color: M2PartTrack;
 	/** Which quad styles this emitter draws, and how many that is per particle. */
 	private readonly head: boolean;
 	private readonly tail: boolean;
@@ -118,6 +122,21 @@ export class ParticleSystem {
 
 		this.mesh = new Mesh(this.geometry, this.material);
 		this.mesh.frustumCulled = false;
+		this.color = emitter.color;
+	}
+
+	/**
+	 * Replaces the colour keys with a ParticleColor.dbc triple, as start, middle and end RGB in 0..255.
+	 * The emitter keeps its own key times and its alpha track. Pass null to go back to its own colours.
+	 */
+	setColorOverride(rgb: Float32Array | null): void {
+		if (!rgb) {
+			this.color = this.emitter.color;
+			return;
+		}
+		const own = this.emitter.color;
+		const times = own.times.length === 3 ? own.times : DEFAULT_COLOR_TIMES;
+		this.color = { times, values: rgb, comp: 3, interpolation: 1 };
 	}
 
 	setTexture(texture: Texture): void {
@@ -233,7 +252,7 @@ export class ParticleSystem {
 			const o = i * STRIDE;
 			const age = p[o + 6];
 			const t = age / p[o + 7];
-			samplePart(e.color, t, tmpV, 255);
+			samplePart(this.color, t, tmpV, 255);
 			const r = tmpV[0] / 255,
 				g = tmpV[1] / 255,
 				b = tmpV[2] / 255;

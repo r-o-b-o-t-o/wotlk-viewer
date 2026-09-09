@@ -65,8 +65,20 @@ export interface ItemDisplayInfo {
 	flags: number;
 	/** HelmetGeosetVisData ids for male / female. */
 	helmetGeosetVis: [number, number];
+	/** ParticleColor.dbc row recolouring this appearance's particles; 0 for none. */
+	particleColorId: number;
 	/** Body region textures, see ITEM_TEXTURE_SLOTS. */
 	textures: string[];
+}
+
+/**
+ * ParticleColor.dbc row: three colour sets, each with a start, middle and end key. An emitter's
+ * `particleColorIndex` of 11, 12 or 13 picks which set it takes.
+ */
+export interface ParticleColorRow {
+	id: number;
+	/** start[3], middle[3] then end[3], as 0xAARRGGBB. */
+	colors: number[];
 }
 
 export interface HelmetGeosetVisData {
@@ -192,9 +204,16 @@ export class GameData {
 					geosetGroups: [d.uint(i, 7), d.uint(i, 8), d.uint(i, 9)] as [number, number, number],
 					flags: d.uint(i, 10),
 					helmetGeosetVis: [d.uint(i, 13), d.uint(i, 14)] as [number, number],
+					particleColorId: d.uint(i, 24),
 					textures: [15, 16, 17, 18, 19, 20, 21, 22].map((f) => d.string(i, f)),
 				})),
 			),
+		);
+	}
+
+	particleColors(): Promise<Map<number, ParticleColorRow>> {
+		return this.table("ParticleColor", (d) =>
+			byId(d.map((i) => ({ id: d.uint(i, 0), colors: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((f) => d.uint(i, f)) }))),
 		);
 	}
 

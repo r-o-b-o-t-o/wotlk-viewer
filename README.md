@@ -167,6 +167,9 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   comes from the "second texture material override" block indexed by the batch's shader id rather than from
   `materialIndex + 1`. That block is not parsed, so detail and env-map layers can look off. Batches never carry
   more than two textures.
+- Particle `zSource`, which aims the emission away from a point on the emitter's Z axis, is deliberately skipped.
+  It reaches about 14 base models, nearly all rifles and shotguns firing a muzzle flash, and was triaged as not
+  worth the code.
 - Bezier tracks are treated as hermite.
 - Sequence switching is instant (no `blendTime` cross-fade) and Stand variations are not randomized (always variation 0
   unless you pass one).

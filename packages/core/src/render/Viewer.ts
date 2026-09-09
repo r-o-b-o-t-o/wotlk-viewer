@@ -12,6 +12,15 @@ export interface ViewerOptions {
 	antialias?: boolean;
 }
 
+/** Share of the pending zoom spent per frame; OrbitControls damps rotation and panning the same way. */
+const ZOOM_DAMPING = 0.08;
+/** Pending zoom below this is not worth another frame of easing. */
+const ZOOM_EPSILON = 1e-4;
+/** Log-distance change per wheel notch and per pixel of ctrl-drag. */
+const WHEEL_ZOOM_SPEED = 0.0015;
+const DRAG_ZOOM_SPEED = 0.006;
+const tmpOffset = new Vector3();
+
 /**
  * Minimal scene setup: renderer, orbit camera, lighting and a render loop that updates M2 instances.
  * Instances are placed under `root`, which converts WoW's Z-up space to three.js Y-up.
@@ -35,6 +44,8 @@ export class Viewer {
 	private raf = 0;
 	private lastTime = 0;
 	private readonly resizeObserver: ResizeObserver | null = null;
+	/** Zoom still to be eased out, as a log distance change. */
+	private pendingZoom = 0;
 
 	constructor(opts: ViewerOptions = {}) {
 		const canvas = opts.canvas ?? document.createElement("canvas");
@@ -54,9 +65,12 @@ export class Viewer {
 
 		this.camera = new PerspectiveCamera(45, 1, 0.05, 500);
 		this.camera.position.set(4, 1.5, 0);
+		this.bindZoom(canvas);
 		this.controls = new OrbitControls(this.camera, canvas);
 		this.controls.target.set(0, 1, 0);
 		this.controls.enableDamping = true;
+		this.controls.enableZoom = false; // zoomed by hand below, with inertia
+		this.controls.minDistance = 0.25; // never reach the target, which leaves no direction to zoom back out along
 
 		this.root.rotation.x = -Math.PI / 2;
 		this.scene.add(this.root);
@@ -69,6 +83,51 @@ export class Viewer {
 
 	get canvas(): HTMLCanvasElement {
 		return this.renderer.domElement;
+	}
+
+	/**
+	 * Wheel and ctrl + vertical drag feed `pendingZoom`, which `render()` eases out.
+	 * Must be bound before OrbitControls so the ctrl-drag can be swallowed: OrbitControls treats
+	 * every modifier as "pan", and listeners on the same element run in registration order.
+	 */
+	private bindZoom(canvas: HTMLCanvasElement): void {
+		let dragging = false;
+		let lastY = 0;
+		canvas.addEventListener("pointerdown", (e) => {
+			if (e.button !== 0 || !e.ctrlKey) return;
+			e.stopImmediatePropagation();
+			dragging = true;
+			lastY = e.clientY;
+			canvas.setPointerCapture(e.pointerId);
+		});
+		canvas.addEventListener("pointermove", (e) => {
+			if (!dragging) return;
+			this.pendingZoom += (e.clientY - lastY) * DRAG_ZOOM_SPEED;
+			lastY = e.clientY;
+		});
+		const stop = () => (dragging = false);
+		canvas.addEventListener("pointerup", stop);
+		canvas.addEventListener("pointercancel", stop);
+		canvas.addEventListener(
+			"wheel",
+			(e) => {
+				e.preventDefault();
+				this.pendingZoom += e.deltaY * WHEEL_ZOOM_SPEED;
+			},
+			{ passive: false },
+		);
+	}
+
+	/** Spends part of the pending zoom; OrbitControls picks the new distance up and clamps it. */
+	private applyZoom(): void {
+		if (Math.abs(this.pendingZoom) < ZOOM_EPSILON) {
+			this.pendingZoom = 0;
+			return;
+		}
+		const step = this.pendingZoom * ZOOM_DAMPING;
+		this.pendingZoom -= step;
+		tmpOffset.subVectors(this.camera.position, this.controls.target);
+		this.camera.position.addVectors(this.controls.target, tmpOffset.multiplyScalar(Math.exp(step)));
 	}
 
 	add(instance: M2Instance): void {
@@ -118,6 +177,7 @@ export class Viewer {
 		);
 		this.controls.target.copy(center);
 		this.camera.position.set(center.x + dist, center.y + radius * 0.15, center.z);
+		this.pendingZoom = 0; // a leftover from the previous model would drift out of the new frame
 		this.controls.update();
 	}
 
@@ -132,6 +192,7 @@ export class Viewer {
 
 	/** Renders one frame, advancing animations by `dtMs`. */
 	render(dtMs = 0): void {
+		this.applyZoom();
 		this.controls.update();
 		this.camera.updateMatrixWorld();
 		this.root.updateMatrixWorld(true);

@@ -119,6 +119,8 @@ Endpoints:
   `item_instance`). Both transmog fields come from mod-transmog's `custom_transmogrification` table, whose
   entry 1 means "hidden" rather than an appearance; the module is optional, so the server probes for that
   table once and omits the fields when it is absent. Drop the items flagged `transmogHidden` before building.
+  `guild: { id, name, emblemStyle, emblemColor, borderStyle, borderColor, backgroundColor }` follows
+  `guild_member` and is absent for a character without a guild; pass its emblem fields as `guildEmblem`.
 
 Any other backend works as long as it implements `DataSource` (`readFile`, optional `exists`).
 
@@ -128,7 +130,9 @@ Any other backend works as long as it implements `DataSource` (`readFile`, optio
 2. Geosets: hair from `CharHairGeosets`, facial features from `CharacterFacialHairStyles`, clothing groups from each
    item's `ItemDisplayInfo.GeosetGroup`, helmets hide groups through `HelmetGeosetVisData`.
 3. Body texture: skin, face, facial hair, scalp and underwear layers from `CharSections`, then the region textures of
-   every equipped item (`Item\TextureComponents\...`, gender-specific with `_U` fallback) composited on a 2D canvas.
+   every equipped item (`Item\TextureComponents\...`, gender-specific with `_U` fallback) composited on a 2D canvas. The
+   guild tabard (the one item flagged in `ItemDisplayInfo`) instead takes background, border and emblem layers from
+   `Textures\GuildEmblems` when `guildEmblem` is given.
 4. Hair texture (texture type 6), cape (type 2) and monster textures are bound to the M2's replaceable slots.
 5. Helm (`_<RacePrefix><M|F>` variant), shoulders, weapons and shields are loaded as separate `M2Instance`s and
    attached to the body's attachment points; they animate on their own.

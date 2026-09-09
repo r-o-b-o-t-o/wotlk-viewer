@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { CharacterDb, type DbOptions } from "./db.js";
 import { defaultRoots, FileResolver } from "./files.js";
 
-export type { CharacterDetails, CharacterSummary, DbOptions, EquippedItem } from "./db.js";
+export type { CharacterDetails, CharacterGuild, CharacterSummary, DbOptions, EquippedItem } from "./db.js";
 export { CharacterDb, FileResolver, defaultRoots };
 // FsDataSource lives at `@wotlk-viewer/server/fs`; re-exporting it here would drag core's
 // TypeScript sources into Vite config bundles, which Node cannot load.

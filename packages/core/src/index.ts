@@ -34,7 +34,12 @@ export type {
 	CustomizationOptions,
 } from "./character/GameData.js";
 export { TextureCompositor, blpToCanvas } from "./character/TextureCompositor.js";
-export { CharacterBuilder, type CharacterAppearance, type CharacterItem } from "./character/CharacterBuilder.js";
+export {
+	CharacterBuilder,
+	type CharacterAppearance,
+	type CharacterItem,
+	type GuildEmblem,
+} from "./character/CharacterBuilder.js";
 export { CreatureBuilder } from "./character/CreatureBuilder.js";
 export { memo } from "./util/memo.js";
 export { mountInstance, type MountOptions } from "./render/mountInstance.js";

@@ -32,6 +32,15 @@ export interface CharacterItem {
 	inventoryType?: InventoryType;
 }
 
+/** Guild crest, as stored in the emblem columns of AzerothCore's `guild` table. */
+export interface GuildEmblem {
+	emblemStyle: number;
+	emblemColor: number;
+	borderStyle: number;
+	borderColor: number;
+	backgroundColor: number;
+}
+
 export interface CharacterAppearance {
 	race: number;
 	gender: Gender;
@@ -43,6 +52,8 @@ export interface CharacterAppearance {
 	hairColor?: number;
 	facialStyle?: number;
 	items?: CharacterItem[];
+	/** Crest to paint onto the guild tabard; without it the tabard keeps its blank default look. */
+	guildEmblem?: GuildEmblem;
 	showHelm?: boolean;
 	showCloak?: boolean;
 	showTabard?: boolean;
@@ -87,6 +98,9 @@ const SHEATH_ATTACHMENTS: Record<number, [AttachmentId, AttachmentId]> = {
 	4: [AttachmentId.SheathShield, AttachmentId.SheathShield], // shields, centred on the back
 };
 const SHEATH_HIDDEN = 7;
+
+/** ItemDisplayInfo flag carried by the one tabard the guild crest is painted onto. */
+const GUILD_TABARD_FLAG = 0x1;
 
 /** Body texture draw order (later slots draw on top). */
 const SLOT_ORDER = [
@@ -260,10 +274,17 @@ export class CharacterBuilder {
 		push(underwearSec?.textures[1], CharRegion.TorsoUpper);
 
 		const genderSuffix = sex === 1 ? "F" : "M";
+		const tabard = bySlot.get(EquipmentSlot.Tabard);
+		// The guild tabard ships a blank white texture; the crest takes its place.
+		const guildLayers =
+			app.guildEmblem && tabard && tabard.display.flags & GUILD_TABARD_FLAG
+				? guildTabardLayers(app.guildEmblem)
+				: null;
 		const itemLayers = await Promise.all(
 			(hasRobe ? SLOT_ORDER_ROBE : SLOT_ORDER).flatMap((slot) => {
 				const item = bySlot.get(slot);
 				if (!item) return [];
+				if (slot === EquipmentSlot.Tabard && guildLayers) return guildLayers.map((l) => Promise.resolve(l));
 				// ItemDisplayInfo carries textures for the whole armor set; only the slot's own regions apply.
 				const allowed = [...(SLOT_TEXTURE_REGIONS[slot] ?? [])];
 				if (slot === EquipmentSlot.Chest && hasRobe) allowed.push(5, 6);
@@ -431,6 +452,22 @@ export class CharacterBuilder {
 			console.warn(`Failed to attach ${modelPath}: ${e instanceof Error ? e.message : e}`);
 		}
 	}
+}
+
+/**
+ * Guild crest layers for the two torso regions, background first. The files are pre-tinted, so the
+ * colour indices pick a texture rather than a palette entry.
+ */
+function guildTabardLayers(e: GuildEmblem): { path: string; region: CharRegion }[] {
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return [
+		`Background_${pad(e.backgroundColor)}`,
+		`Border_${pad(e.borderStyle)}_${pad(e.borderColor)}`,
+		`Emblem_${pad(e.emblemStyle)}_${pad(e.emblemColor)}`,
+	].flatMap((name) => [
+		{ path: `Textures\\GuildEmblems\\${name}_TU_U.blp`, region: CharRegion.TorsoUpper },
+		{ path: `Textures\\GuildEmblems\\${name}_TL_U.blp`, region: CharRegion.TorsoLower },
+	]);
 }
 
 function stripExt(name: string): string {

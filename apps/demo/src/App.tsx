@@ -114,6 +114,7 @@ export function App(): JSX.Element {
 			hairStyle: c.hairStyle,
 			hairColor: c.hairColor,
 			facialStyle: c.facialStyle,
+			guildEmblem: c.guild,
 			items: c.equipment
 				.filter((e) => !(transmog && e.transmogHidden))
 				.map((e) => ({

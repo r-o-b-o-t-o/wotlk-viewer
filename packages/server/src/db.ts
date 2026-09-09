@@ -33,6 +33,17 @@ export interface EquippedItem {
 /** mod-transmog stores this entry to mean "hide this item" rather than an appearance. */
 const TRANSMOG_HIDDEN = 1;
 
+/** Guild membership; the emblem fields are what a guild tabard is painted with. */
+export interface CharacterGuild {
+	id: number;
+	name: string;
+	emblemStyle: number;
+	emblemColor: number;
+	borderStyle: number;
+	borderColor: number;
+	backgroundColor: number;
+}
+
 export interface CharacterDetails extends CharacterSummary {
 	skin: number;
 	face: number;
@@ -40,6 +51,7 @@ export interface CharacterDetails extends CharacterSummary {
 	hairColor: number;
 	facialStyle: number;
 	equipment: EquippedItem[];
+	guild?: CharacterGuild;
 }
 
 /** Read-only access to player characters and their equipped items. */
@@ -68,7 +80,13 @@ export class CharacterDb {
 
 	async get(guid: number): Promise<CharacterDetails | null> {
 		const [rows] = await this.pool.query<RowDataPacket[]>(
-			"SELECT guid, name, race, class, gender, level, skin, face, hairStyle, hairColor, facialStyle FROM characters WHERE guid = ?",
+			`SELECT c.guid, c.name, c.race, c.class, c.gender, c.level, c.skin, c.face, c.hairStyle, c.hairColor,
+              c.facialStyle, g.guildid, g.name AS guildName,
+              g.EmblemStyle, g.EmblemColor, g.BorderStyle, g.BorderColor, g.BackgroundColor
+       FROM characters c
+       LEFT JOIN guild_member gm ON gm.guid = c.guid
+       LEFT JOIN guild g ON g.guildid = gm.guildid
+       WHERE c.guid = ?`,
 			[guid],
 		);
 		const c = rows[0];
@@ -82,12 +100,28 @@ export class CharacterDb {
 			[guid],
 		);
 		return {
-			...(c as CharacterSummary),
+			guid: c.guid,
+			name: c.name,
+			race: c.race,
+			class: c.class,
+			gender: c.gender,
+			level: c.level,
 			skin: c.skin,
 			face: c.face,
 			hairStyle: c.hairStyle,
 			hairColor: c.hairColor,
 			facialStyle: c.facialStyle,
+			guild: c.guildid
+				? {
+						id: c.guildid,
+						name: c.guildName,
+						emblemStyle: c.EmblemStyle,
+						emblemColor: c.EmblemColor,
+						borderStyle: c.BorderStyle,
+						borderColor: c.BorderColor,
+						backgroundColor: c.BackgroundColor,
+					}
+				: undefined,
 			equipment: items.map((i) => {
 				const fake = Number(i.FakeEntry) || 0;
 				return {

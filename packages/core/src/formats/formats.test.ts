@@ -72,6 +72,27 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 		expect(m2.textures.some((t) => t.type === 6)).toBe(true); // hair slot
 	});
 
+	it("reads the cameras a character is shown through", () => {
+		// The pair every character model carries: a portrait framing the head, and the character tab.
+		expect(m2.cameras.map((c) => c.type)).toEqual([0, 1]);
+		for (const c of m2.cameras) {
+			expect(c.fov).toBeGreaterThan(0);
+			expect(c.nearClip).toBeLessThan(c.farClip);
+		}
+		expect(m2.cameras[0].target[2]).toBeGreaterThan(1.5); // head height
+	});
+
+	it("reads the camera a glue backdrop is composed around", () => {
+		const backdrop = parseM2(read("Data_enUS/Interface/Glues/Models/UI_Human/UI_Human.m2"));
+		expect(backdrop.cameras.length).toBe(1);
+		const cam = backdrop.cameras[0];
+		expect((cam.fov * 180) / Math.PI).toBeCloseTo(80);
+		expect(cam.farClip).toBeCloseTo(611.111, 2);
+		// Both sit inside the scene, which is modelled a long way off the origin.
+		expect(cam.position.map(Math.round)).toEqual([-222, -82, -2]);
+		expect(cam.target.map(Math.round)).toEqual([-230, -79, -2]);
+	});
+
 	it("reads the skin profile", () => {
 		expect(skin.submeshes.length).toBe(61);
 		expect(skin.batches.length).toBe(61);

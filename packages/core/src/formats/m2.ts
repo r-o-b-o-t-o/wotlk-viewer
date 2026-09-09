@@ -152,6 +152,23 @@ export interface M2Attachment {
 	animateAttached: M2Track; // uint8
 }
 
+/**
+ * A camera baked into the model. The glue-screen backdrops carry exactly one, which is the view
+ * their scene was composed for.
+ */
+export interface M2Camera {
+	/** 0 portrait, 1 character info, -1 anything else (a backdrop's own view). */
+	type: number;
+	/** Diagonal field of view in radians; the client derives a vertical one from the aspect ratio. */
+	fov: number;
+	farClip: number;
+	nearClip: number;
+	/** Eye position. */
+	position: [number, number, number];
+	/** Point the camera looks at. */
+	target: [number, number, number];
+}
+
 export interface M2Data {
 	name: string;
 	globalFlags: number;
@@ -179,6 +196,7 @@ export interface M2Data {
 	textureCombinerCombos: Uint16Array;
 	attachments: M2Attachment[];
 	attachmentLookup: Int16Array;
+	cameras: M2Camera[];
 	particleEmitters: M2ParticleEmitter[];
 	/** Source bytes: embedded sequence data is read from here. */
 	reader: BinaryReader;
@@ -467,6 +485,21 @@ const readSequence = (r: BinaryReader): M2Sequence => {
 	return { id, variationIndex, duration, moveSpeed, flags, frequency, blendTime, variationNext, aliasNext };
 };
 
+// 100 bytes up to Cataclysm, which moved `fov` to the end and made it a track.
+const readCamera = (r: BinaryReader): M2Camera => {
+	const type = r.i32();
+	const fov = r.f32();
+	const farClip = r.f32();
+	const nearClip = r.f32();
+	// Both tracks hold offsets from the base position that a still camera leaves at zero, so only
+	// the bases are read; every backdrop's camera is still.
+	readTrack(r);
+	const position = r.vec3();
+	readTrack(r);
+	const target = r.vec3();
+	return { type, fov, farClip, nearClip, position, target };
+};
+
 const readBone = (r: BinaryReader): M2Bone => {
 	const keyBoneId = r.i32();
 	const flags = r.u32();
@@ -541,7 +574,9 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 	r.skip(24 + 4 + 8 * 3); // collision box, radius, collision arrays
 	const attachments = readArray(r);
 	const attachmentLookup = readArray(r);
-	r.skip(8 * 5); // events, lights, cameras, camera lookup, ribbons: unused
+	r.skip(8 * 2); // events and lights: unused
+	const cameras = readArray(r);
+	r.skip(8 * 2); // camera lookup and ribbons: unused
 	const particles = readArray(r);
 	// Only present with the global flag, and always last, so nothing else shifts when it is absent.
 	const combinerCombos =
@@ -591,6 +626,7 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 		}),
 		textureCombinerCombos: u16(combinerCombos),
 		attachmentLookup: i16(attachmentLookup),
+		cameras: readList(r, cameras, 100, readCamera),
 		particleEmitters: readList(r, particles, 476, readParticle),
 		reader: r,
 	};

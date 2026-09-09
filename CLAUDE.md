@@ -40,7 +40,7 @@ server CLI through `--env-file-if-exists`.
 wowdev.wiki documents the file formats. `WebFetch` gets a 403 there; `curl -A` with a browser
 user agent works.
 
-- https://wowdev.wiki/M2 — header layout, particle emitters, and the flag tables
+- https://wowdev.wiki/M2 — header layout, particle emitters, the camera block, and the flag tables
 - https://wowdev.wiki/M2/Rendering — blend modes, and the combiners with their exact per-op formulas
 - https://wowdev.wiki/DB/ParticleColor — how a display's `ParticleColorID` recolours emitters
 - https://wowdev.wiki/DB/ItemDisplayInfo — column list

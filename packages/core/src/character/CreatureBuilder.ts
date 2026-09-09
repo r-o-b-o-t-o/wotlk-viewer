@@ -3,6 +3,7 @@ import { M2TextureType } from "../formats/m2.js";
 import { M2Instance } from "../render/M2Instance.js";
 import type { M2Lighting } from "../render/M2Material.js";
 import type { GameData } from "./GameData.js";
+import { petScale, type PetInfo } from "./pet.js";
 
 /** Builds creature models from CreatureDisplayInfo ids (skin variations and scale). */
 export class CreatureBuilder {
@@ -12,7 +13,8 @@ export class CreatureBuilder {
 		readonly lighting: M2Lighting,
 	) {}
 
-	async build(displayId: number): Promise<M2Instance> {
+	/** `pet` sizes the model the way the client sizes a character's pet (see `petScale`). */
+	async build(displayId: number, pet?: PetInfo): Promise<M2Instance> {
 		const cdi = (await this.data.creatureDisplayInfo()).get(displayId);
 		if (!cdi) throw new Error(`Unknown display id ${displayId}`);
 		const path = await this.data.displayModelPath(displayId);
@@ -32,7 +34,12 @@ export class CreatureBuilder {
 			const row = (await this.data.particleColors()).get(cdi.particleColorId);
 			if (row) inst.setParticleColors(row.colors);
 		}
-		if (cdi.scale > 0) inst.scale.setScalar(cdi.scale);
+		let scale = cdi.scale > 0 ? cdi.scale : 1;
+		if (pet?.tamed) {
+			const family = (await this.data.creatureFamilies()).get(pet.family);
+			if (family) scale *= petScale(family, pet.level);
+		}
+		inst.scale.setScalar(scale);
 		return inst;
 	}
 }

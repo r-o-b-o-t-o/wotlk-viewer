@@ -24,6 +24,7 @@ export { GameData } from "./character/GameData.js";
 export type {
 	ChrRace,
 	CreatureDisplayInfo,
+	CreatureFamily,
 	CreatureModelData,
 	CharSection,
 	CharHairGeoset,
@@ -42,5 +43,6 @@ export {
 	type GuildEmblem,
 } from "./character/CharacterBuilder.js";
 export { CreatureBuilder } from "./character/CreatureBuilder.js";
+export { petPosition, petScale, type PetInfo } from "./character/pet.js";
 export { memo } from "./util/memo.js";
-export { mountInstance, type MountOptions } from "./render/mountInstance.js";
+export { mountInstance, positionInstance, type InstancePosition, type MountOptions } from "./render/mountInstance.js";

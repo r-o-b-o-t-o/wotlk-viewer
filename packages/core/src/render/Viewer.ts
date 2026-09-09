@@ -33,6 +33,12 @@ export class Viewer {
 	/** Z-up parent for M2 instances. */
 	readonly root = new Group();
 	readonly instances: M2Instance[] = [];
+	/**
+	 * Instance the camera frames and orbits on, its own body alone. Without one it uses every
+	 * instance and everything attached to them, which drags the pivot off a character towards its
+	 * pet and its weapons.
+	 */
+	pivot: M2Instance | null = null;
 	readonly lighting: M2Lighting = {
 		ambient: new Vector3(0.55, 0.55, 0.55),
 		diffuse: new Vector3(0.7, 0.7, 0.7),
@@ -138,6 +144,7 @@ export class Viewer {
 	remove(instance: M2Instance): void {
 		const i = this.instances.indexOf(instance);
 		if (i >= 0) this.instances.splice(i, 1);
+		if (this.pivot === instance) this.pivot = null;
 		this.root.remove(instance);
 	}
 
@@ -148,7 +155,11 @@ export class Viewer {
 		}
 	}
 
-	/** Points the camera at the instances' bounds (attached models included). */
+	/**
+	 * Points the camera at the instances' bounds (attached models included), or at `pivot`'s own
+	 * body when one is set. A pet beside it or a polearm in its hand may then start partly out of
+	 * frame, which is better than moving the camera off the subject to make room.
+	 */
 	frame(padding = 1.3): void {
 		if (this.instances.length === 0) return;
 		this.camera.updateMatrixWorld();
@@ -156,14 +167,23 @@ export class Viewer {
 		// Attached models only get their matrix inside update(), which may not have run yet.
 		for (const inst of this.instances) inst.update(0, this.camera);
 		const box = new Box3();
-		const addBounds = (inst: M2Instance) => {
+		const addBody = (inst: M2Instance, target: Box3) => {
 			// Bind-pose geometry bounds; the M2 bounding box is often much looser.
 			const g = inst.model.geometry;
 			if (!g.boundingBox) g.computeBoundingBox();
-			box.union(g.boundingBox!.clone().applyMatrix4(inst.matrixWorld));
-			for (const a of inst.attached) addBounds(a.instance);
+			target.union(g.boundingBox!.clone().applyMatrix4(inst.matrixWorld));
 		};
-		for (const inst of this.instances) addBounds(inst);
+		const addWithAttached = (inst: M2Instance, target: Box3) => {
+			addBody(inst, target);
+			for (const a of inst.attached) addWithAttached(a.instance, target);
+		};
+		if (this.pivot && this.instances.includes(this.pivot)) {
+			// Body only: a two-hander reaches twice as far as the character carrying it, so letting
+			// gear into the box would re-frame the same character every time the weapon changed.
+			addBody(this.pivot, box);
+		} else {
+			for (const inst of this.instances) addWithAttached(inst, box);
+		}
 		const center = box.getCenter(new Vector3());
 		const size = box.getSize(new Vector3());
 		const radius = Math.max(size.x, size.y, size.z) * 0.5 * padding;

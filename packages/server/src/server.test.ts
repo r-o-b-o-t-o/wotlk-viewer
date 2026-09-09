@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
-import { AssetManager, CharSectionType, GameData, Gender } from "@wotlk-viewer/core";
+import { AssetManager, CharSectionType, GameData, Gender, petScale } from "@wotlk-viewer/core";
 import { FsDataSource } from "./FsDataSource.js";
 import { defaultRoots, FileResolver } from "./files.js";
 
@@ -39,6 +39,23 @@ describe.skipIf(!hasClient)("GameData", () => {
 		expect(opts.skins.length).toBeGreaterThan(5);
 		expect(opts.hairStyles).toContain(0);
 		expect(opts.faces.length).toBeGreaterThan(5);
+	});
+
+	it("sizes a tamed pet from its creature family", async () => {
+		const data = await load();
+		const moth = (await data.creatureFamilies()).get(37)!;
+		expect(moth.name).toBe("Moth");
+		// 0.35 at level 1 growing to 0.65 at level 60, which is why a fresh moth is not NPC-sized.
+		expect(petScale(moth, 1)).toBeCloseTo(0.35);
+		expect(petScale(moth, 60)).toBeCloseTo(0.65);
+		expect(petScale(moth, 80)).toBeCloseTo(0.65);
+		// Warlock pets carry one flat size at both ends.
+		const imp = (await data.creatureFamilies()).get(23)!;
+		expect([petScale(imp, 1), petScale(imp, 80)]).toEqual([0.5, 0.5]);
+		// The crab is the one family whose DBC size runs over the 1.0 cap.
+		const crab = (await data.creatureFamilies()).get(8)!;
+		expect(crab.maxScale).toBeCloseTo(1.4);
+		expect(petScale(crab, 80)).toBe(1);
 	});
 
 	it("resolves items to display info", async () => {

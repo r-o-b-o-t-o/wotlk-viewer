@@ -5,6 +5,7 @@ import {
 	EquipmentSlot,
 	GameData,
 	HttpDataSource,
+	petPosition,
 	type CharacterAppearance,
 	type CharacterItem,
 	type M2Instance,
@@ -67,6 +68,7 @@ export function App(): JSX.Element {
 	const [selectedGuid, setSelectedGuid] = createSignal<number | null>(null);
 	const [dbCharacter, setDbCharacter] = createSignal<CharacterDetails | null>(null);
 	const [showTransmog, setShowTransmog] = createSignal(true);
+	const [showPet, setShowPet] = createSignal(true);
 
 	const [races] = createResource(() => gameData.races());
 	const [animNames] = createResource(() => gameData.animationNames());
@@ -326,6 +328,14 @@ export function App(): JSX.Element {
 							/>{" "}
 							Transmog
 						</label>
+						<label>
+							<input
+								type="checkbox"
+								checked={showPet()}
+								onChange={(e) => setShowPet(e.currentTarget.checked)}
+							/>{" "}
+							Pet
+						</label>
 					</div>
 
 					<h2>Equipment (item entries)</h2>
@@ -371,9 +381,23 @@ export function App(): JSX.Element {
 							gameData={gameData}
 							appearance={appearance}
 							animation={animation()}
+							pivot
 							onLoad={onLoad}
 							onError={onError}
 						/>
+					</Show>
+					{/* The loaded character's pet; it idles on its own, and the animation list stays the character's. */}
+					<Show when={mode() === "character" && showPet() && dbCharacter()?.pet}>
+						{(pet) => (
+							<Creature
+								assets={assets}
+								gameData={gameData}
+								displayId={pet().displayId}
+								pet={pet()}
+								position={petPosition}
+								onError={onError}
+							/>
+						)}
 					</Show>
 					<Show when={mode() === "creature"}>
 						<Creature

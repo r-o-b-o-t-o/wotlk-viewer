@@ -30,6 +30,16 @@ export interface CreatureModelData {
 	modelName: string;
 }
 
+/** CreatureFamily.dbc: the size a tamed pet of this family grows to between two levels. */
+export interface CreatureFamily {
+	id: number;
+	minScale: number;
+	minScaleLevel: number;
+	maxScale: number;
+	maxScaleLevel: number;
+	name: string;
+}
+
 export interface CharSection {
 	id: number;
 	race: number;
@@ -154,6 +164,21 @@ export class GameData {
 	creatureModelData(): Promise<Map<number, CreatureModelData>> {
 		return this.table("CreatureModelData", (d) =>
 			byId(d.map((i) => ({ id: d.uint(i, 0), modelName: d.string(i, 2) }))),
+		);
+	}
+
+	creatureFamilies(): Promise<Map<number, CreatureFamily>> {
+		return this.table("CreatureFamily", (d) =>
+			byId(
+				d.map((i) => ({
+					id: d.uint(i, 0),
+					minScale: d.float(i, 1),
+					minScaleLevel: d.uint(i, 2),
+					maxScale: d.float(i, 3),
+					maxScaleLevel: d.uint(i, 4),
+					name: d.string(i, 10),
+				})),
+			),
 		);
 	}
 

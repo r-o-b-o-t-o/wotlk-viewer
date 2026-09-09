@@ -12,7 +12,7 @@ from an extracted game client and assembles fully equipped player characters.
 | `@wotlk-viewer/server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` (at `@wotlk-viewer/server/fs`) for Node scripts and tests. |
 | `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`.                                                                                                                                                                |
 | `@wotlk-viewer/react`  | The same components for React.                                                                                                                                                                                                            |
-| `apps/demo`            | SolidJS demo: browse database characters, tweak appearance and equipment, play animations.                                                                                                                                                |
+| `apps/demo`            | SolidJS demo: browse database characters and their pets, tweak appearance and equipment, play animations.                                                                                                                                 |
 
 ## Getting started
 
@@ -72,7 +72,10 @@ await character.playAnimation(AnimationId.EmoteDance);
 Plain models work the same way with `M2Instance.create(await assets.loadModel(path), assets, viewer.lighting)`;
 creatures with `new CreatureBuilder(assets, gameData, viewer.lighting).build(displayId)`.
 
-`Viewer` is a convenience (renderer, orbit camera, resize handling, render loop). `M2Instance` is a regular
+`Viewer` is a convenience (renderer, orbit camera, resize handling, render loop). `viewer.pivot` names the instance
+`frame()` fits and the camera orbits, its own body alone: the same character is framed the same way whatever it has
+equipped and whatever stands next to it, and a pet or a polearm may start partly out of frame rather than push the
+camera off its subject. `M2Instance` is a regular
 `THREE.Object3D` in WoW's Z-up space, so it can be dropped into any three.js scene: call `instance.update(dtMs, camera)`
 once per frame and parent it under a group rotated by `-90°` around X (see `Viewer.root`).
 
@@ -87,7 +90,17 @@ import { Character, WowViewer } from '@wotlk-viewer/solid';
 ```
 
 `<Model assets path="Creature\Murloc\Murloc.m2" />` shows a raw model, `<Creature assets displayId={188} />` a creature
-by display id. `useViewer()` gives children the `Viewer`. For other frameworks, `mountInstance(viewer, load, opts)`
+by display id. All three take a `position`, either `[x, y, z]` in the viewer's Z-up space or a function of the loaded
+instance; `petPosition` is one such function, standing a pet off its owner's left shoulder and a step back. Passing
+the character's pet to `<Creature pet>` also sizes it the way the client does, and `pivot` frames and orbits the
+camera on the character rather than on the pair:
+
+```tsx
+<Character assets={assets} appearance={appearance()} pivot />
+<Creature assets={assets} displayId={character.pet.displayId} pet={character.pet} position={petPosition} />
+```
+
+`useViewer()` gives children the `Viewer`. For other frameworks, `mountInstance(viewer, load, opts)`
 from the core package holds the same lifecycle (load, cancel, add, frame, dispose) behind one disposer.
 The package ships TSX source (like most Solid libraries); compile it with `vite-plugin-solid` in the consuming app.
 
@@ -123,10 +136,11 @@ Endpoints:
   `guild_member` and is absent for a character without a guild; pass its emblem fields as `guildEmblem`.
   `pet: { entry, displayId, name, level, family, tamed }` is the `character_pet` row in slot 0, the one the
   character currently has out; the stabled ones are not returned, and death knights are left out since every
-  one of them carries the same ghoul. `displayId` goes straight to `CreatureBuilder` / `<Creature>`. `family`
-  is `creature_template.family`, read from the world database — `worldDatabase`, by default the characters
+  one of them carries the same ghoul. `displayId` goes straight to `CreatureBuilder` / `<Creature>`, and the
+  whole object goes to their `pet` argument, which sizes a tamed pet from `CreatureFamily.dbc`. `family` is
+  `creature_template.family`, read from the world database — `worldDatabase`, by default the characters
   database with a `_characters` suffix swapped for `_world`. That one is optional too: without it `family`
-  is 0, and a tamed pet then has nothing to size it.
+  is 0 and pets keep their display scale, which leaves tamed ones at full NPC size.
 
 Any other backend works as long as it implements `DataSource` (`readFile`, optional `exists`).
 
@@ -182,6 +196,17 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - NPC humanoids (`CreatureDisplayInfoExtra`, baked NPC textures) are not supported; `CreatureBuilder` only handles
   monster texture variations and scale.
 - `CharSections.Flags` are ignored, so `customizationOptions()` also lists NPC-only / death-knight-only skins.
+- A tamed pet's size is its `CreatureFamily.dbc` scale for its level, on top of the display scale, which is what
+  AzerothCore sends as the pet's object scale; summons (warlock, mage) keep the display scale, and their families
+  carry one flat value anyway. The family scale is then capped at 1.0, standing in for AzerothCore's own cap on
+  eleven exotic families: of those only the crab's DBC value (1.4) is above 1.0, so the flat cap reproduces the
+  whole correction, and the one family it trims that the server does not is the cat (1.1).
+- `petPosition` assumes a fixed character half-width rather than measuring the owner, since every playable race is
+  about as broad. The pet's own distance follows the narrower of its two horizontal bind-pose extents, because a
+  bind pose splays wings or arms along one axis and would otherwise push a moth halfway across the scene. Both
+  models face forward and stand on the same ground, where the game angles a pet slightly inwards. A wide pet can
+  start partly out of frame, since `frame()` fits the character's body alone — as can a two-hander, which reaches
+  about twice as far as the character carrying it; orbiting or zooming out brings either in.
 - Geoset defaults: ears = 702, every other group = 1. Tail/loincloth groups (6, 14) were not verified beyond a visual
   check of Tauren and Draenei. Death knight eye glow is enabled from `classId === 6` (geoset 1703).
 - Robes reset kneepads to 901 and take the trouser geoset from the chest; the boot geoset is left as-is.

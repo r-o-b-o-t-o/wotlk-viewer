@@ -5,9 +5,12 @@ import {
 	GameData,
 	M2Instance,
 	mountInstance,
+	positionInstance,
 	Viewer,
 	type AssetManager,
 	type CharacterAppearance,
+	type InstancePosition,
+	type PetInfo,
 	type ViewerOptions,
 } from "@wotlk-viewer/core";
 
@@ -64,8 +67,12 @@ export function useViewer(): Viewer {
 interface InstanceProps {
 	animation?: number;
 	loop?: boolean;
+	/** Where the model stands, default the origin. */
+	position?: InstancePosition;
 	/** Re-frame the camera when the model changes (default true). */
 	autoFrame?: boolean;
+	/** Frame and orbit the camera on this model's body alone, gear and everything else left out. */
+	pivot?: boolean;
 	onLoad?: (instance: M2Instance) => void;
 	onError?: (error: unknown) => void;
 }
@@ -77,7 +84,9 @@ function useInstance(load: () => Promise<M2Instance>, deps: unknown[], props: In
 
 	useEffect(() => {
 		const unmount = mountInstance(viewer, load, {
+			position: props.position,
 			autoFrame: props.autoFrame,
+			pivot: props.pivot,
 			onLoad: (inst) => {
 				setInstance(inst);
 				props.onLoad?.(inst);
@@ -94,6 +103,10 @@ function useInstance(load: () => Promise<M2Instance>, deps: unknown[], props: In
 	useEffect(() => {
 		if (instance) void instance.playAnimation(props.animation ?? 0, { loop: props.loop ?? true });
 	}, [instance, props.animation, props.loop]);
+
+	useEffect(() => {
+		if (instance && props.position) positionInstance(instance, props.position);
+	}, [instance, props.position]);
 }
 
 export interface ModelProps extends InstanceProps {
@@ -140,6 +153,8 @@ export interface CreatureProps extends InstanceProps {
 	gameData?: GameData;
 	/** CreatureDisplayInfo id. */
 	displayId: number;
+	/** Set when the creature is a character's pet, which the client sizes by its family. */
+	pet?: PetInfo;
 }
 
 /** Displays a creature by display id (model, skin variation, scale). */
@@ -149,9 +164,9 @@ export function Creature(props: CreatureProps) {
 	useInstance(
 		() => {
 			data.current ??= props.gameData ?? new GameData(props.assets);
-			return new CreatureBuilder(props.assets, data.current, viewer.lighting).build(props.displayId);
+			return new CreatureBuilder(props.assets, data.current, viewer.lighting).build(props.displayId, props.pet);
 		},
-		[props.displayId],
+		[props.displayId, props.pet?.family, props.pet?.level, props.pet?.tamed],
 		props,
 	);
 	return null;

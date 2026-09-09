@@ -121,6 +121,12 @@ Endpoints:
   table once and omits the fields when it is absent. Drop the items flagged `transmogHidden` before building.
   `guild: { id, name, emblemStyle, emblemColor, borderStyle, borderColor, backgroundColor }` follows
   `guild_member` and is absent for a character without a guild; pass its emblem fields as `guildEmblem`.
+  `pet: { entry, displayId, name, level, family, tamed }` is the `character_pet` row in slot 0, the one the
+  character currently has out; the stabled ones are not returned, and death knights are left out since every
+  one of them carries the same ghoul. `displayId` goes straight to `CreatureBuilder` / `<Creature>`. `family`
+  is `creature_template.family`, read from the world database — `worldDatabase`, by default the characters
+  database with a `_characters` suffix swapped for `_world`. That one is optional too: without it `family`
+  is 0, and a tamed pet then has nothing to size it.
 
 Any other backend works as long as it implements `DataSource` (`readFile`, optional `exists`).
 

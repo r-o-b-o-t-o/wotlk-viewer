@@ -45,6 +45,8 @@ const CORNERS = new Int8Array([-1, 1, 0, 0, 1, 1, 1, 0, 1, -1, 1, 1, -1, -1, 0, 
 const tmpV = new Float32Array(4);
 const tmpPos = new Vector3();
 const tmpDir = new Vector3();
+const tmpAcross = new Vector3();
+const tmpAlong = new Vector3();
 
 /** Samples a life-fraction keyed track, falling back to a constant when it has no keys. */
 function samplePart(track: M2PartTrack, t: number, out: Float32Array, fallback: number): void {
@@ -71,18 +73,28 @@ export class ParticleSystem {
 	private readonly attributes: BufferAttribute[];
 	private count = 0;
 	private emitAccumulator = 0;
+	/** Which quad styles this emitter draws, and how many that is per particle. */
+	private readonly head: boolean;
+	private readonly tail: boolean;
+	private readonly quadsPer: number;
 
 	constructor(
 		readonly emitter: M2ParticleEmitter,
 		texture: Texture,
 		readonly maxParticles = 512,
 	) {
+		// Head and tail are independent styles; an emitter asking for both draws two quads per particle.
+		// Neither bit set is treated as a head, which is what the client falls back to.
+		this.tail = (emitter.flags & M2ParticleFlags.TailStyle) !== 0;
+		this.head = !this.tail || (emitter.flags & M2ParticleFlags.HeadStyle) !== 0;
+		this.quadsPer = (this.head ? 1 : 0) + (this.tail ? 1 : 0);
+		const quads = maxParticles * this.quadsPer;
 		this.particles = new Float32Array(maxParticles * STRIDE);
-		this.positions = new Float32Array(maxParticles * 4 * 3);
-		this.uvs = new Float32Array(maxParticles * 4 * 2);
-		this.colors = new Float32Array(maxParticles * 4 * 4);
-		const index = new Uint16Array(maxParticles * 6);
-		for (let i = 0; i < maxParticles; i++) {
+		this.positions = new Float32Array(quads * 4 * 3);
+		this.uvs = new Float32Array(quads * 4 * 2);
+		this.colors = new Float32Array(quads * 4 * 4);
+		const index = new Uint16Array(quads * 6);
+		for (let i = 0; i < quads; i++) {
 			const v = i * 4;
 			index.set([v, v + 1, v + 2, v, v + 2, v + 3], i * 6);
 		}
@@ -114,19 +126,19 @@ export class ParticleSystem {
 
 	/**
 	 * Simulates `dt` seconds and rebuilds the quads. `bone` is the emitter bone's model-space matrix,
-	 * `up` the world up axis in that same space, which gravity follows for WorldUp emitters.
+	 * `up` the world up axis in that same space, which gravity follows for world-space emitters.
 	 */
 	update(dt: number, animator: M2Animator, bone: Matrix4, basis: BillboardBasis, up: Vector3): void {
 		const e = this.emitter;
 		const p = this.particles;
 
-		// Gravity pulls along the model's -Z, or along world down where the emitter is flagged WorldUp:
-		// an attached weapon is rotated, so its own -Z is not down.
+		// A world-space emitter's particles fall along world down; an attached weapon is rotated, so its
+		// own -Z is not down. Model-space ones keep falling along the model's -Z.
 		const g = animator.sampleScalar(e.gravity, "float", 0) * dt;
-		const worldUp = (e.flags & M2ParticleFlags.WorldUp) !== 0;
-		const gx = worldUp ? -up.x * g : 0;
-		const gy = worldUp ? -up.y * g : 0;
-		const gz = worldUp ? -up.z * g : -g;
+		const world = (e.flags & M2ParticleFlags.WorldSpace) !== 0;
+		const gx = world ? -up.x * g : 0;
+		const gy = world ? -up.y * g : 0;
+		const gz = world ? -up.z * g : -g;
 		const drag = Math.max(0, 1 - e.drag * dt);
 		for (let i = 0; i < this.count;) {
 			const o = i * STRIDE;
@@ -198,25 +210,29 @@ export class ParticleSystem {
 		p[o + 6] = 0;
 		p[o + 7] = life;
 		p[o + 8] =
-			e.flags & M2ParticleFlags.RandomTexture ? Math.floor(Math.random() * e.textureRows * e.textureCols) : -1;
+			e.flags & M2ParticleFlags.ChooseRandomTexture
+				? Math.floor(Math.random() * e.textureRows * e.textureCols)
+				: -1;
 		p[o + 9] = 1 + e.scaleVary[0] * rand2();
 		p[o + 10] = e.baseSpin + e.baseSpinVary * rand2();
-		p[o + 11] = e.spin + e.spinVary * rand2();
+		// NegateSpinRandom sends half the particles the other way round.
+		const flip = e.flags & M2ParticleFlags.NegateSpinRandom && Math.random() < 0.5 ? -1 : 1;
+		p[o + 11] = (e.spin + e.spinVary * rand2()) * flip;
 	}
 
 	private buildQuads(basis: BillboardBasis): void {
-		this.geometry.setDrawRange(0, this.count * 6);
+		this.geometry.setDrawRange(0, this.count * this.quadsPer * 6);
 		if (this.count === 0) return; // nothing to draw, so nothing to upload
 		const e = this.emitter;
 		const cols = Math.max(1, e.textureCols);
 		const rows = Math.max(1, e.textureRows);
+		const clampTail = (e.flags & M2ParticleFlags.ClampTailToAge) !== 0;
 		const p = this.particles;
-		const pos = this.positions;
-		const uv = this.uvs;
-		const col = this.colors;
+		let quad = 0;
 		for (let i = 0; i < this.count; i++) {
 			const o = i * STRIDE;
-			const t = p[o + 6] / p[o + 7];
+			const age = p[o + 6];
+			const t = age / p[o + 7];
 			samplePart(e.color, t, tmpV, 255);
 			const r = tmpV[0] / 255,
 				g = tmpV[1] / 255,
@@ -235,40 +251,75 @@ export class ParticleSystem {
 			}
 			const cu = (cell % cols) / cols;
 			const cv = Math.floor(cell / cols) / rows;
-
-			// The quad spins in its own plane, so the corner is rotated before the camera basis maps it out.
-			const angle = p[o + 10] + p[o + 11] * p[o + 6];
-			const cos = Math.cos(angle),
-				sin = Math.sin(angle);
 			const x = p[o],
 				y = p[o + 1],
 				z = p[o + 2];
-			const v = i * 4;
-			for (let c = 0; c < 4; c++) {
-				const k = c * 4;
-				const ox = CORNERS[k] * sx,
-					oy = CORNERS[k + 1] * sy;
-				const rx = ox * cos - oy * sin,
-					ry = ox * sin + oy * cos;
-				const vi = (v + c) * 3;
-				pos[vi] = x + basis.right.x * rx + basis.up.x * ry;
-				pos[vi + 1] = y + basis.right.y * rx + basis.up.y * ry;
-				pos[vi + 2] = z + basis.right.z * rx + basis.up.z * ry;
-				uv[(v + c) * 2] = cu + CORNERS[k + 2] / cols;
-				uv[(v + c) * 2 + 1] = cv + CORNERS[k + 3] / rows;
-				const ci = (v + c) * 4;
-				col[ci] = r;
-				col[ci + 1] = g;
-				col[ci + 2] = b;
-				col[ci + 3] = a;
+
+			if (this.head) {
+				// The quad spins in its own plane, so the corner is rotated before the basis maps it out.
+				const angle = p[o + 10] + p[o + 11] * age;
+				const cos = Math.cos(angle),
+					sin = Math.sin(angle);
+				tmpAcross.copy(basis.right).multiplyScalar(cos * sx);
+				tmpAcross.addScaledVector(basis.up, sin * sx);
+				tmpAlong.copy(basis.up).multiplyScalar(cos * sy);
+				tmpAlong.addScaledVector(basis.right, -sin * sy);
+				this.writeQuad(quad++, x, y, z, cu, cv, cols, rows, r, g, b, a);
+			}
+			if (this.tail) {
+				// A tail is stretched back over the ground the particle covered in `tailLength` seconds,
+				// and lies across the view direction so the streak stays broadside to the camera.
+				const span = (clampTail ? Math.min(e.tailLength, age) : e.tailLength) * 0.5;
+				tmpAlong.set(p[o + 3] * span, p[o + 4] * span, p[o + 5] * span);
+				tmpAcross.crossVectors(tmpAlong, basis.back);
+				if (tmpAcross.lengthSq() < 1e-12) tmpAcross.copy(basis.right); // standing still: no axis to lie along
+				tmpAcross.setLength(sx);
+				this.writeQuad(quad++, x - tmpAlong.x, y - tmpAlong.y, z - tmpAlong.z, cu, cv, cols, rows, r, g, b, a);
 			}
 		}
-		// Upload only the live quads instead of the whole 512-particle buffer.
-		const vertices = this.count * 4;
+		// Upload only the live quads instead of the whole buffer.
+		const vertices = quad * 4;
 		for (const attr of this.attributes) {
 			attr.clearUpdateRanges();
 			attr.addUpdateRange(0, vertices * attr.itemSize);
 			attr.needsUpdate = true;
+		}
+	}
+
+	/** Writes one quad centred on `x,y,z`, spanning `tmpAcross` and `tmpAlong`. */
+	private writeQuad(
+		quad: number,
+		x: number,
+		y: number,
+		z: number,
+		cu: number,
+		cv: number,
+		cols: number,
+		rows: number,
+		r: number,
+		g: number,
+		b: number,
+		a: number,
+	): void {
+		const pos = this.positions;
+		const uv = this.uvs;
+		const col = this.colors;
+		const v = quad * 4;
+		for (let c = 0; c < 4; c++) {
+			const k = c * 4;
+			const across = CORNERS[k],
+				along = CORNERS[k + 1];
+			const vi = (v + c) * 3;
+			pos[vi] = x + tmpAcross.x * across + tmpAlong.x * along;
+			pos[vi + 1] = y + tmpAcross.y * across + tmpAlong.y * along;
+			pos[vi + 2] = z + tmpAcross.z * across + tmpAlong.z * along;
+			uv[(v + c) * 2] = cu + CORNERS[k + 2] / cols;
+			uv[(v + c) * 2 + 1] = cv + CORNERS[k + 3] / rows;
+			const ci = (v + c) * 4;
+			col[ci] = r;
+			col[ci + 1] = g;
+			col[ci + 2] = b;
+			col[ci + 3] = a;
 		}
 	}
 

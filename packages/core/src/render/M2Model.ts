@@ -146,13 +146,24 @@ function buildGeometry(m2: M2Data, skin: SkinData): BufferGeometry {
 	g.setAttribute("skinWeight", new BufferAttribute(skinWeight, 4));
 	g.setIndex(new BufferAttribute(skin.indices, 1));
 	// One draw group per batch; instances map group i to their material i. Groups of a single mesh keep
-	// this order, so additive batches go last: they are glow decals, and a translucent layer over the
-	// surface behind them would otherwise paint them out (the rune on Titansteel Shield Wall).
+	// this order, and it is the order the translucent ones are drawn in, so it decides what paints
+	// over what.
+	//
+	// `priorityPlane` leads, being the artist's own layering: Acherus puts its Icecrown sky bowl on
+	// plane 0 and the mountains inside it on 9, and taken in file order the bowl lands on top of them
+	// as a dark band across the sky. Only about one model in twenty sets it at all.
+	//
+	// Additive batches come last within a plane: they are glow decals, and a translucent layer over
+	// the surface behind them would otherwise paint them out (the rune on Titansteel Shield Wall).
 	const isGlow = (i: number) => {
 		const mode = m2.materials[skin.batches[i].materialIndex].blendMode;
 		return mode === M2BlendMode.Add || mode === M2BlendMode.NoAlphaAdd ? 1 : 0;
 	};
-	for (const i of skin.batches.map((_, i) => i).sort((a, b) => isGlow(a) - isGlow(b))) {
+	const order = skin.batches.map((_, i) => i);
+	order.sort(
+		(a, b) => skin.batches[a].priorityPlane - skin.batches[b].priorityPlane || isGlow(a) - isGlow(b) || a - b,
+	);
+	for (const i of order) {
 		const sm = skin.submeshes[skin.batches[i].submeshIndex];
 		g.addGroup(sm.indexStart, sm.indexCount, i);
 	}

@@ -195,9 +195,11 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath
   attachments derived from `Item.dbc` `SheatheType`, and held off-hand items disappear, like in the game.
   Combining both gives the ranged stance: bow in hand, melee gear stowed.
-- Translucent batches of one model are drawn in file order, with additive glow decals forced last, instead of being
-  depth-sorted per submesh: every batch of a mesh shares one sort key in three.js. Models whose translucent layers
-  need another order can still stack wrongly.
+- Translucent batches of one model are drawn in `priorityPlane` order, additive glow decals last within a plane and
+  file order under that, instead of being depth-sorted per submesh: every batch of a mesh shares one sort key in
+  three.js. That covers the glue backdrops, which lean on the planes heavily, and about one model in twenty sets
+  them at all; the rest fall back to the same file order as before. Models whose translucent layers need a
+  viewpoint-dependent order can still stack wrongly.
 - The second texture layer's combiner comes from `textureCombinerCombos`, indexed by the batch's shader id. The
   first layer's op is assumed to be a modulate, which holds on all but two of the client's item batches, and the
   Decal, Fade and Envmap ops are not modelled and fall back to a modulate. Batches never carry more than two

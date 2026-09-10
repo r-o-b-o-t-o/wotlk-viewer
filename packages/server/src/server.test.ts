@@ -17,6 +17,19 @@ describe.skipIf(!hasClient)("FileResolver", () => {
 	});
 });
 
+describe.skipIf(!hasClient)("M2Model", () => {
+	it("draws translucent batches in priority-plane order", async () => {
+		const assets = new AssetManager(await FsDataSource.fromClientDir(CLIENT));
+		const model = await assets.loadModel("Interface/Glues/Models/UI_DeathKnight/UI_DeathKnight.m2");
+		const plane = (batch: number) => model.skin.batches[batch].priorityPlane;
+		const order = model.geometry.groups.map((g) => g.materialIndex ?? 0);
+		expect(new Set(order.map(plane)).size).toBeGreaterThan(1); // or the check below proves nothing
+		// Acherus hangs its Icecrown sky bowl on plane 0 and the mountains inside it on 9. Taken in
+		// file order the bowl lands on top of them, as a dark band across the sky.
+		for (let i = 1; i < order.length; i++) expect(plane(order[i])).toBeGreaterThanOrEqual(plane(order[i - 1]));
+	});
+});
+
 describe.skipIf(!hasClient)("GameData", () => {
 	const load = async () => new GameData(new AssetManager(await FsDataSource.fromClientDir(CLIENT)));
 

@@ -11,7 +11,8 @@ import {
 	WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { M2_MAX_LIGHTS, type M2Lighting } from "./M2Material.js";
+import { M2LightType } from "../formats/m2.js";
+import { M2_MAX_LIGHTS, M2_MAX_POINT_LIGHTS, type M2Lighting } from "./M2Material.js";
 import type { M2Instance } from "./M2Instance.js";
 
 export interface ViewerOptions {
@@ -72,6 +73,7 @@ export class Viewer {
 	readonly lighting: M2Lighting = {
 		ambient: new Vector3(0.55, 0.55, 0.55),
 		lights: [{ color: new Vector3(0.7, 0.7, 0.7), direction: new Vector3(0.3, 0.6, 0.75).normalize() }],
+		points: [],
 		fog: new Vector4(0, 0, 0, 0), // a bare Vector4 has w = 1, which would fog the scene solid
 	};
 	/** Scene holding the backdrop, drawn before `scene` through `backdropCamera`. */
@@ -82,6 +84,7 @@ export class Viewer {
 	readonly backdropLighting: M2Lighting = {
 		ambient: new Vector3(),
 		lights: Array.from({ length: M2_MAX_LIGHTS }, () => ({ color: new Vector3(), direction: new Vector3() })),
+		points: Array.from({ length: M2_MAX_POINT_LIGHTS }, () => ({ color: new Vector3(), position: new Vector3() })),
 		fog: new Vector4(0, 0, 0, 0), // a bare Vector4 has w = 1, which would fog the scene solid
 	};
 	/** Animation speed multiplier; 0 pauses. */
@@ -250,6 +253,28 @@ export class Viewer {
 		});
 	}
 
+	/**
+	 * Moves the backdrop's own point lights into view space, every frame: a torch flickers on a
+	 * global sequence and a light rides whichever bone it hangs off. The model's directional lights
+	 * are left out — they repeat the scene light set the glue screen supplies separately.
+	 */
+	private updateBackdropPointLights(): void {
+		const backdrop = this.backdrop!;
+		const { lights } = backdrop.model.m2;
+		const slots = this.backdropLighting.points;
+		let n = 0;
+		for (let i = 0; i < lights.length && n < slots.length; i++) {
+			if (lights[i].type !== M2LightType.Point) continue;
+			const slot = slots[n++];
+			slot.color.copy(backdrop.animator.lights[i].color);
+			slot.position
+				.copy(backdrop.animator.lights[i].position)
+				.applyMatrix4(backdrop.matrixWorld)
+				.applyMatrix4(this.backdropCamera.matrixWorldInverse);
+		}
+		for (; n < slots.length; n++) slots[n].color.setScalar(0);
+	}
+
 	/** The client reads a camera's diagonal FOV as a vertical one for the aspect it is drawn at. */
 	private updateBackdropProjection(): void {
 		this.backdropCamera.aspect = this.camera.aspect;
@@ -333,6 +358,7 @@ export class Viewer {
 		if (!this.backdrop) return this.renderer.render(this.scene, this.camera);
 		this.backdropRoot.updateMatrixWorld(true);
 		this.backdrop.update(dtMs * this.timeScale, this.backdropCamera);
+		this.updateBackdropPointLights();
 		// Two passes with the depth buffer cleared between them: the backdrop keeps the depths its own
 		// scene was built at, and the models always draw in front of all of it.
 		this.renderer.autoClear = false;

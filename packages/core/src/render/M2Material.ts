@@ -40,23 +40,37 @@ export interface M2MaterialOptions {
 
 /** How many directional lights a material shades with; the glue backdrops use at most three. */
 export const M2_MAX_LIGHTS = 3;
+/**
+ * How many point lights a material shades with. Three is the most any backdrop has, and four covers
+ * all but one of the 119 models in the client that carry lights at all.
+ */
+export const M2_MAX_POINT_LIGHTS = 4;
 
 /** One directional light. */
-export interface M2Light {
+export interface M2DirectionalLight {
 	/** Unit vector towards the light, view space. */
 	direction: Vector3;
 	/** Diffuse colour, already scaled by the light's intensity; black is off. */
 	color: Vector3;
 }
 
+/** One point light, falling off with distance. */
+export interface M2PointLight {
+	/** View space. */
+	position: Vector3;
+	/** Diffuse colour, already scaled by the light's intensity; black is off. */
+	color: Vector3;
+}
+
 /**
- * Scene lighting shared by all M2 materials: an ambient term plus up to `M2_MAX_LIGHTS`
- * directional ones. A material keeps the vectors themselves, so editing one in place reaches every
- * material at once; growing the array afterwards does not.
+ * Scene lighting shared by all M2 materials: an ambient term plus up to `M2_MAX_LIGHTS` directional
+ * and `M2_MAX_POINT_LIGHTS` point lights. A material keeps the vectors themselves, so editing one in
+ * place reaches every material at once; growing an array afterwards does not.
  */
 export interface M2Lighting {
 	ambient: Vector3;
-	lights: M2Light[];
+	lights: M2DirectionalLight[];
+	points: M2PointLight[];
 	/**
 	 * Linear fog: `x`, `y`, `z` are its colour and `w` the distance at which it has taken over
 	 * completely, 0 leaving the scene clear. Packed into one vector so that a material binds it once
@@ -78,7 +92,7 @@ uniform int uTexCoord1;
 varying vec2 vUv0;
 varying vec2 vUv1;
 varying vec3 vNormal;
-varying float vViewDepth;
+varying vec3 vViewPos;
 
 vec2 texCoord(int src, vec3 n) {
   if (src == 2) return vec2(n.x * 0.5 + 0.5, 0.5 - n.y * 0.5);
@@ -96,7 +110,7 @@ void main() {
   #include <begin_vertex>
   #include <skinning_vertex>
   #include <project_vertex>
-  vViewDepth = -mvPosition.z;
+  vViewPos = mvPosition.xyz;
   vNormal = normalize(transformedNormal);
   vUv0 = (uTexMat0 * vec4(texCoord(uTexCoord0, vNormal), 0.0, 1.0)).xy;
   vUv1 = (uTexMat1 * vec4(texCoord(uTexCoord1, vNormal), 0.0, 1.0)).xy;
@@ -116,11 +130,13 @@ uniform bool uUnfogged;
 uniform vec3 uAmbient;
 uniform vec3 uLightColor[MAX_LIGHTS];
 uniform vec3 uLightDir[MAX_LIGHTS];
+uniform vec3 uPointColor[MAX_POINT_LIGHTS];
+uniform vec3 uPointPos[MAX_POINT_LIGHTS];
 uniform vec4 uFog;
 varying vec2 vUv0;
 varying vec2 vUv1;
 varying vec3 vNormal;
-varying float vViewDepth;
+varying vec3 vViewPos;
 
 void main() {
   vec4 t0 = texture2D(uTex0, vUv0);
@@ -146,9 +162,16 @@ void main() {
     vec3 n = normalize(gl_FrontFacing ? vNormal : -vNormal);
     vec3 light = uAmbient;
     for (int i = 0; i < MAX_LIGHTS; i++) light += uLightColor[i] * max(dot(n, uLightDir[i]), 0.0);
+    for (int i = 0; i < MAX_POINT_LIGHTS; i++) {
+      vec3 toLight = uPointPos[i] - vViewPos;
+      float dist = max(length(toLight), 0.001);
+      // The falloff the glue screens use: no constant term, 0.7 linear and 0.03 quadratic.
+      float atten = 1.0 / (0.7 * dist + 0.03 * dist * dist);
+      light += uPointColor[i] * atten * max(dot(n, toLight / dist), 0.0);
+    }
     rgb *= light;
   }
-  if (!uUnfogged && uFog.w > 0.0) rgb = mix(rgb, uFog.xyz, clamp(vViewDepth / uFog.w, 0.0, 1.0));
+  if (!uUnfogged && uFog.w > 0.0) rgb = mix(rgb, uFog.xyz, clamp(-vViewPos.z / uFog.w, 0.0, 1.0));
   gl_FragColor = vec4(rgb, a);
 }
 `;
@@ -198,11 +221,19 @@ export class M2Material extends ShaderMaterial {
 			direction: lighting.lights[i]?.direction ?? NO_LIGHT,
 			color: lighting.lights[i]?.color ?? NO_LIGHT,
 		}));
+		const points = Array.from({ length: M2_MAX_POINT_LIGHTS }, (_, i) => ({
+			position: lighting.points[i]?.position ?? NO_LIGHT,
+			color: lighting.points[i]?.color ?? NO_LIGHT,
+		}));
 		super({
 			vertexShader: VERTEX,
 			fragmentShader: FRAGMENT,
 			// three.js only defines USE_UV1 for built-in map channels, so declare it here to get `uv1`.
-			defines: { USE_UV1: "", MAX_LIGHTS: String(M2_MAX_LIGHTS) },
+			defines: {
+				USE_UV1: "",
+				MAX_LIGHTS: String(M2_MAX_LIGHTS),
+				MAX_POINT_LIGHTS: String(M2_MAX_POINT_LIGHTS),
+			},
 			uniforms: {
 				uTex0: { value: white },
 				uTex1: { value: white },
@@ -223,6 +254,8 @@ export class M2Material extends ShaderMaterial {
 				uAmbient: { value: lighting.ambient },
 				uLightColor: { value: lights.map((l) => l.color) },
 				uLightDir: { value: lights.map((l) => l.direction) },
+				uPointColor: { value: points.map((l) => l.color) },
+				uPointPos: { value: points.map((l) => l.position) },
 			},
 		});
 		this.side = flags & M2MaterialFlags.TwoSided ? DoubleSide : FrontSide;

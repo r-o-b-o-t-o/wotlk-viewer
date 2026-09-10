@@ -4,7 +4,7 @@ export { parseBlp, type BlpImage } from "./formats/blp.js";
 export * from "./formats/m2.js";
 export * from "./formats/skin.js";
 export { readTrackKeys, sampleTrack, type TrackKeys, type TrackKind } from "./animation/tracks.js";
-export { M2Animator, type BillboardBasis } from "./animation/M2Animator.js";
+export { M2Animator, type AnimatedLight, type BillboardBasis } from "./animation/M2Animator.js";
 export {
 	type DataSource,
 	HttpDataSource,
@@ -17,10 +17,12 @@ export { M2Model } from "./render/M2Model.js";
 export {
 	M2Material,
 	M2_MAX_LIGHTS,
+	M2_MAX_POINT_LIGHTS,
 	TexCoordSource,
-	type M2Light,
+	type M2DirectionalLight,
 	type M2Lighting,
 	type M2MaterialOptions,
+	type M2PointLight,
 } from "./render/M2Material.js";
 export { M2Instance, type PlayOptions } from "./render/M2Instance.js";
 export { ParticleSystem } from "./render/ParticleSystem.js";

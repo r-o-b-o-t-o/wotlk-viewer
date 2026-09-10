@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readTrackKeys } from "../animation/tracks.js";
 import { parseM2 } from "./m2.js";
 import { parseSkin } from "./skin.js";
 import { parseBlp } from "./blp.js";
@@ -91,6 +92,24 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 		// Both sit inside the scene, which is modelled a long way off the origin.
 		expect(cam.position.map(Math.round)).toEqual([-222, -82, -2]);
 		expect(cam.target.map(Math.round)).toEqual([-230, -79, -2]);
+	});
+
+	it("reads the lights a glue backdrop lights itself with", () => {
+		const backdrop = parseM2(read("Data_enUS/Interface/Glues/Models/UI_NightElf/UI_NightElf.m2"));
+		expect(backdrop.lights.map((l) => l.type)).toEqual([1, 1, 0, 1]);
+		for (const l of backdrop.lights) expect(l.bone).toBeLessThan(backdrop.bones.length);
+		// The bright one sits in the moonwell, whose geometry centres on (-25.7, -6.0, 1.2).
+		const well = backdrop.lights[0];
+		expect(well.position.map(Math.round)).toEqual([-23, -5, 2]);
+		const keys = (t: (typeof well)["diffuseColor"], kind: "vec3" | "float") =>
+			readTrackKeys(backdrop.reader, t, 0, kind)!.values;
+		expect([...keys(well.diffuseColor, "vec3")].map((v) => +v.toFixed(2))).toEqual([0.32, 0.58, 0.54]);
+		expect(keys(well.diffuseIntensity, "float")[0]).toBeCloseTo(13);
+		// The only directional entry repeats what RaceLights gives the night elf scene as its ambient.
+		const ambient = backdrop.lights[2];
+		expect([...keys(ambient.ambientColor, "vec3")].map((v) => +v.toFixed(2))).toEqual([0.45, 0.45, 0.85]);
+		expect(keys(ambient.ambientIntensity, "float")[0]).toBeCloseTo(0.2);
+		expect(keys(ambient.diffuseIntensity, "float")[0]).toBe(0);
 	});
 
 	it("reads the skin profile", () => {

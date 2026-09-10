@@ -152,6 +152,33 @@ export interface M2Attachment {
 	animateAttached: M2Track; // uint8
 }
 
+export const M2LightType = {
+	/** Not used outside the glue screens, where the client takes the direction from elsewhere. */
+	Directional: 0,
+	Point: 1,
+} as const;
+
+/**
+ * A light carried by the model. The glue-screen backdrops light their moonwells and torches with
+ * point lights like these; their directional entries repeat what `RaceLights` in the client's
+ * GlueXML already says.
+ */
+export interface M2Light {
+	/** See M2LightType. */
+	type: number;
+	/** Bone the position hangs off, -1 for none. */
+	bone: number;
+	/** Relative to `bone`. */
+	position: [number, number, number];
+	ambientColor: M2Track; // vec3
+	ambientIntensity: M2Track; // float, 1 by default
+	diffuseColor: M2Track; // vec3
+	diffuseIntensity: M2Track; // float, 1 by default
+	attenuationStart: M2Track; // float
+	attenuationEnd: M2Track; // float
+	visibility: M2Track; // uint8, on by default
+}
+
 /**
  * A camera baked into the model. The glue-screen backdrops carry exactly one, which is the view
  * their scene was composed for.
@@ -196,6 +223,7 @@ export interface M2Data {
 	textureCombinerCombos: Uint16Array;
 	attachments: M2Attachment[];
 	attachmentLookup: Int16Array;
+	lights: M2Light[];
 	cameras: M2Camera[];
 	particleEmitters: M2ParticleEmitter[];
 	/** Source bytes: embedded sequence data is read from here. */
@@ -485,6 +513,32 @@ const readSequence = (r: BinaryReader): M2Sequence => {
 	return { id, variationIndex, duration, moveSpeed, flags, frequency, blendTime, variationNext, aliasNext };
 };
 
+// 156 bytes (0x9C).
+const readLight = (r: BinaryReader): M2Light => {
+	const type = r.u16();
+	const bone = r.i16();
+	const position = r.vec3();
+	const ambientColor = readTrack(r);
+	const ambientIntensity = readTrack(r);
+	const diffuseColor = readTrack(r);
+	const diffuseIntensity = readTrack(r);
+	const attenuationStart = readTrack(r);
+	const attenuationEnd = readTrack(r);
+	const visibility = readTrack(r);
+	return {
+		type,
+		bone,
+		position,
+		ambientColor,
+		ambientIntensity,
+		diffuseColor,
+		diffuseIntensity,
+		attenuationStart,
+		attenuationEnd,
+		visibility,
+	};
+};
+
 // 100 bytes up to Cataclysm, which moved `fov` to the end and made it a track.
 const readCamera = (r: BinaryReader): M2Camera => {
 	const type = r.i32();
@@ -574,7 +628,8 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 	r.skip(24 + 4 + 8 * 3); // collision box, radius, collision arrays
 	const attachments = readArray(r);
 	const attachmentLookup = readArray(r);
-	r.skip(8 * 2); // events and lights: unused
+	r.skip(8); // events: unused
+	const lights = readArray(r);
 	const cameras = readArray(r);
 	r.skip(8 * 2); // camera lookup and ribbons: unused
 	const particles = readArray(r);
@@ -626,6 +681,7 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 		}),
 		textureCombinerCombos: u16(combinerCombos),
 		attachmentLookup: i16(attachmentLookup),
+		lights: readList(r, lights, 156, readLight),
 		cameras: readList(r, cameras, 100, readCamera),
 		particleEmitters: readList(r, particles, 476, readParticle),
 		reader: r,

@@ -18,6 +18,14 @@ const tmpPivot = new Matrix4();
 const HALF = new Matrix4().makeTranslation(0.5, 0.5, 0);
 const NEG_HALF = new Matrix4().makeTranslation(-0.5, -0.5, 0);
 
+/** A light the model carries, evaluated at the current time. */
+export interface AnimatedLight {
+	/** Model space, its bone already applied. */
+	position: Vector3;
+	/** Diffuse colour scaled by the light's intensity; black while it is switched off. */
+	color: Vector3;
+}
+
 /** Camera axes expressed in the model's local space, used for billboarded bones. */
 export interface BillboardBasis {
 	right: Vector3;
@@ -35,6 +43,8 @@ export class M2Animator {
 	/** Alpha per M2 texture weight entry. */
 	readonly textureWeights: Float32Array;
 	readonly textureMatrices: Matrix4[];
+	/** One per `m2.lights`, in the same order, so the type of each is still there to read. */
+	readonly lights: AnimatedLight[];
 
 	/** Alias-resolved sequence index being played. */
 	sequence = 0;
@@ -60,6 +70,7 @@ export class M2Animator {
 		this.colors = new Float32Array(m2.colors.length * 4).fill(1);
 		this.textureWeights = new Float32Array(m2.textureWeights.length).fill(1);
 		this.textureMatrices = m2.textureTransforms.map(() => new Matrix4());
+		this.lights = m2.lights.map(() => ({ position: new Vector3(), color: new Vector3() }));
 	}
 
 	get duration(): number {
@@ -105,6 +116,7 @@ export class M2Animator {
 		this.evaluateBones(billboard);
 		this.evaluateColors();
 		this.evaluateTextureTransforms();
+		if (this.lights.length > 0) this.evaluateLights();
 	}
 
 	private trackTime(globalSeq: number): number {
@@ -176,6 +188,31 @@ export class M2Animator {
 		for (let i = 0; i < m2.textureWeights.length; i++) {
 			const w = m2.textureWeights[i].weight;
 			this.textureWeights[i] = this.sample(this.model.keys(w, seq, "fixed16"), w.globalSeq, tmpV) ? tmpV[0] : 1;
+		}
+	}
+
+	/** Only the diffuse side: every light in the client that carries an ambient term is a backdrop's
+	 *  directional one, which the glue screen takes from its own table instead. */
+	private evaluateLights(): void {
+		const { m2 } = this.model;
+		for (let i = 0; i < m2.lights.length; i++) {
+			const light = m2.lights[i];
+			const out = this.lights[i];
+			out.position.fromArray(light.position);
+			// A light hangs off a bone, and -1 means it hangs off the model itself.
+			const bone = this.boneMatrices[light.bone];
+			if (bone) out.position.applyMatrix4(bone);
+			if (
+				this.sample(
+					this.model.keys(light.diffuseColor, this.sequence, "vec3"),
+					light.diffuseColor.globalSeq,
+					tmpV,
+				)
+			)
+				out.color.set(tmpV[0], tmpV[1], tmpV[2]);
+			else out.color.set(1, 1, 1);
+			const on = this.sampleScalar(light.visibility, "u8", 1) > 0;
+			out.color.multiplyScalar(on ? this.sampleScalar(light.diffuseIntensity, "float", 1) : 0);
 		}
 	}
 

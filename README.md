@@ -174,8 +174,8 @@ Any other backend works as long as it implements `DataSource` (`readFile`, optio
    playing its own, so the grip closes around the weapon.
 
 Rendering uses one draw group per skin batch with a small custom shader (1–2 texture layers, WoW blend modes,
-vertex color / alpha / UV-transform tracks, ambient + up to three directional lights and linear fog, in gamma space
-like the original client).
+vertex color / alpha / UV-transform tracks, ambient + up to three directional and four point lights and linear fog,
+in gamma space like the original client).
 Skinning goes through three.js' `SkinnedMesh` with bone matrices computed by `M2Animator` (translation, compressed
 quaternion and scale tracks, global sequences, external `.anim` files loaded on demand).
 
@@ -228,17 +228,23 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Item region textures are filtered per slot (e.g. gloves paint only hands and forearms) since `ItemDisplayInfo`
   rows carry the whole armor set; the robe rule adds the leg regions to chest pieces.
 - The attachment `animateAttached` visibility track is ignored.
-- Ambient plus up to three directional lights and linear fog, no shadows; the models' own light blocks are not read.
-  `Viewer` sets `outputColorSpace = LinearSRGBColorSpace` because shading is done in gamma space; mixing in standard
-  three.js materials needs color-management care.
+- Ambient plus up to three directional and four point lights and linear fog, no shadows. Four covers all but one of
+  the 119 models in the client that carry lights at all (one has fifteen). Point lights fall off the way the glue
+  screens light with — no constant term, 0.7 linear and 0.03 quadratic — so a light's own `attenuation_start` and
+  `attenuation_end` go unread, and only its diffuse side is used, every light in the client with an ambient term
+  being a backdrop's directional one. `Viewer` sets `outputColorSpace = LinearSRGBColorSpace` because shading is
+  done in gamma space; mixing in standard three.js materials needs color-management care.
 - A backdrop is a second render pass with the depth buffer cleared after it, so the character is drawn on top of the
   whole scene and framed by `frame()` — where the client puts it inside the scene, at the point its camera looks at,
   with foreground props able to cover it and a shadow on the ground. Nothing else about the two passes is shared:
   the models keep the viewer's own lighting and stay unfogged.
-- Backdrop lighting and fog are the `RaceLights` and `CharModelFogInfo` tables from the client's
-  `Interface\GlueXML\GlueParent.lua`, which is where the glue screen gets them; the point lights still inside the
-  models are not read, and neither is the per-scene `SetGlow` bloom amount. Fog reaches only the opaque, alpha-key
-  and alpha batches: it washes an additive or modulated one out instead of dimming it.
+- A backdrop is lit from two places, as the glue screen lights it: its scene light set and fog are the `RaceLights`
+  and `CharModelFogInfo` tables in the client's `Interface\GlueXML\GlueParent.lua`, and its moonwells, torches and
+  braziers are the point lights inside the model itself, which follow their bones and flicker on their global
+  sequences. The model's own directional entries are skipped, since they repeat what `RaceLights` already says —
+  checked against all eight scenes, where the two agree to three decimals. The per-scene `SetGlow` bloom amount is
+  not implemented, which leaves the brightest scenes a little flatter than the client's. Fog reaches only the
+  opaque, alpha-key and alpha batches: it washes an additive or modulated one out instead of dimming it.
 - A backdrop is shown through camera 0 of its own model, using only the camera's base position and target. The
   position and target tracks are ignored, which costs nothing here: all eight scenes leave them at zero. Below 4:3
   the vertical field of view stops widening, so a tall viewport crops the sides rather than looking past the top of

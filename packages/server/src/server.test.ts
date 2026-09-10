@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
-import { AssetManager, BACKDROP_SCENES, CharSectionType, GameData, Gender, petScale } from "@wotlk-viewer/core";
+import { AssetManager, backdropScene, CharSectionType, GameData, Gender, petScale } from "@wotlk-viewer/core";
 import { FsDataSource } from "./FsDataSource.js";
 import { defaultRoots, FileResolver } from "./files.js";
 
@@ -69,12 +69,25 @@ describe.skipIf(!hasClient)("GameData", () => {
 
 	it("has a character-creation backdrop for every playable race", async () => {
 		const races = await (await load()).races();
-		for (const id of [1, 2, 3, 4, 5, 6, 7, 8, 10, 11]) {
-			expect(BACKDROP_SCENES[races.get(id)!.clientFileString]).toBeTruthy();
-		}
+		const scene = (id: number, classId?: number) => backdropScene(races.get(id)!.clientFileString, classId);
+		const playable = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11];
+		expect([...new Set(playable.map((id) => scene(id)))].sort()).toEqual([
+			"BloodElf",
+			"Draenei",
+			"Dwarf",
+			"Human",
+			"NightElf",
+			"Orc",
+			"Scourge",
+			"Tauren",
+		]);
 		// The two races the client gives no scene of their own.
-		expect(BACKDROP_SCENES.Gnome).toBe("Dwarf");
-		expect(BACKDROP_SCENES.Troll).toBe("Orc");
+		expect(scene(7)).toBe("Dwarf");
+		expect(scene(8)).toBe("Orc");
+		// A death knight is created in Acherus whatever race it is.
+		expect(scene(7, 6)).toBe("DeathKnight");
+		expect(scene(11, 6)).toBe("DeathKnight");
+		expect(backdropScene("Naga_")).toBeUndefined();
 	});
 
 	it("resolves items to display info", async () => {

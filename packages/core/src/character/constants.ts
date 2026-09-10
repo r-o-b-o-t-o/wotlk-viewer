@@ -3,6 +3,9 @@ export enum Gender {
 	Female = 1,
 }
 
+/** ChrClasses id of the one class the renderer treats specially: eye glow, and its own backdrop. */
+export const DEATH_KNIGHT_CLASS = 6;
+
 /** Character equipment slots (same numbering as the server / `character_inventory.slot`). */
 export enum EquipmentSlot {
 	Head = 0,

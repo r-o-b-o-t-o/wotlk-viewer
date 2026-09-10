@@ -386,7 +386,13 @@ export function App(): JSX.Element {
 				<WowViewer ref={(v) => ((window as unknown as { viewer: unknown }).viewer = v)}>
 					{/* The race's character-creation scene; it keeps its own camera and never orbits. */}
 					<Show when={mode() === "character" && showBackground()}>
-						<Backdrop assets={assets} gameData={gameData} race={appearance.race} onError={onError} />
+						<Backdrop
+							assets={assets}
+							gameData={gameData}
+							race={appearance.race}
+							classId={appearance.classId}
+							onError={onError}
+						/>
 					</Show>
 					<Show when={mode() === "character"}>
 						<Character

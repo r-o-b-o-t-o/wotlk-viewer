@@ -9,6 +9,7 @@ import {
 	AttachmentId,
 	CharRegion,
 	CharSectionType,
+	DEATH_KNIGHT_CLASS,
 	EquipmentSlot,
 	FINGER_KEY_BONES,
 	Gender,
@@ -46,7 +47,7 @@ export interface GuildEmblem {
 export interface CharacterAppearance {
 	race: number;
 	gender: Gender;
-	/** Class id; only used to enable the death knight eye glow (6). */
+	/** Class id; only used to enable the death knight eye glow. */
 	classId?: number;
 	skin?: number;
 	face?: number;
@@ -191,7 +192,7 @@ export class CharacterBuilder {
 		groups.set(GeosetGroup.Facial3, fg[1]);
 		groups.set(GeosetGroup.Facial2, fg[2]);
 		groups.set(GeosetGroup.Facial4, fg[3]);
-		groups.set(GeosetGroup.EyeGlow, app.classId === 6 ? 3 : fg[4]);
+		groups.set(GeosetGroup.EyeGlow, app.classId === DEATH_KNIGHT_CLASS ? 3 : fg[4]);
 
 		const setGroup = (group: GeosetGroup, value: number) => {
 			if (value > 0) groups.set(group, 1 + value);

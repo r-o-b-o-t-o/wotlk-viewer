@@ -168,24 +168,26 @@ export interface BackdropProps {
 	gameData?: GameData;
 	/** ChrRaces id; the scene shown is the one that race's character-creation screen uses. */
 	race: number;
+	/** Class id; death knights get their own scene whatever their race. */
+	classId?: number;
 	onError?: (error: unknown) => void;
 }
 
 /**
- * Shows a race's character-creation scene behind the models. It keeps its own camera, so the mouse
- * controls leave it alone and it always faces the viewer.
+ * Shows a character's character-creation scene behind the models. It keeps its own camera, so the
+ * mouse controls leave it alone and it always faces the viewer.
  */
 export function Backdrop(props: BackdropProps): JSX.Element {
 	const viewer = useViewer();
 	const data = createMemo(() => props.gameData ?? new GameData(props.assets));
 	createEffect(
 		on(
-			() => props.race,
-			(race) =>
+			() => [props.race, props.classId] as const,
+			([race, classId]) =>
 				onCleanup(
 					mountBackdrop(
 						viewer,
-						() => new BackdropBuilder(props.assets, data(), viewer.backdropLighting).build(race),
+						() => new BackdropBuilder(props.assets, data(), viewer.backdropLighting).build(race, classId),
 						{
 							onError: (e) => props.onError?.(e),
 						},

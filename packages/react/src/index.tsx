@@ -155,12 +155,14 @@ export interface BackdropProps {
 	gameData?: GameData;
 	/** ChrRaces id; the scene shown is the one that race's character-creation screen uses. */
 	race: number;
+	/** Class id; death knights get their own scene whatever their race. */
+	classId?: number;
 	onError?: (error: unknown) => void;
 }
 
 /**
- * Shows a race's character-creation scene behind the models. It keeps its own camera, so the mouse
- * controls leave it alone and it always faces the viewer.
+ * Shows a character's character-creation scene behind the models. It keeps its own camera, so the
+ * mouse controls leave it alone and it always faces the viewer.
  */
 export function Backdrop(props: BackdropProps) {
 	const viewer = useViewer();
@@ -169,11 +171,15 @@ export function Backdrop(props: BackdropProps) {
 		data.current ??= props.gameData ?? new GameData(props.assets);
 		return mountBackdrop(
 			viewer,
-			() => new BackdropBuilder(props.assets, data.current!, viewer.backdropLighting).build(props.race),
+			() =>
+				new BackdropBuilder(props.assets, data.current!, viewer.backdropLighting).build(
+					props.race,
+					props.classId,
+				),
 			{ onError: (e) => props.onError?.(e) },
 		);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [props.race]);
+	}, [props.race, props.classId]);
 	return null;
 }
 

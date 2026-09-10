@@ -53,6 +53,12 @@ export {
 } from "./character/CharacterBuilder.js";
 export { CreatureBuilder } from "./character/CreatureBuilder.js";
 export { petPosition, petScale, type PetInfo } from "./character/pet.js";
-export { BACKDROP_SCENES, BackdropBuilder, mountBackdrop, type Backdrop } from "./character/backdrop.js";
+export {
+	BackdropBuilder,
+	backdropScene,
+	mountBackdrop,
+	type Backdrop,
+	type BackdropScene,
+} from "./character/backdrop.js";
 export { memo } from "./util/memo.js";
 export { mountInstance, positionInstance, type InstancePosition, type MountOptions } from "./render/mountInstance.js";

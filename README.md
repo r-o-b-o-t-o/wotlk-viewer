@@ -72,12 +72,13 @@ await character.playAnimation(AnimationId.EmoteDance);
 Plain models work the same way with `M2Instance.create(await assets.loadModel(path), assets, viewer.lighting)`;
 creatures with `new CreatureBuilder(assets, gameData, viewer.lighting).build(displayId)`.
 
-`BackdropBuilder` loads the scene a race's character-creation screen stands it in — the eight models under
-`Interface\Glues\Models`, with gnomes sharing the dwarf one and trolls the orc one. `viewer.setBackdrop()` draws it in
-a pass of its own, seen through the camera baked into the model, so the mouse controls never move it:
+`BackdropBuilder` loads the scene a character-creation screen stands a character in — the nine models under
+`Interface\Glues\Models`, with gnomes sharing the dwarf one, trolls the orc one, and death knights taking Acherus
+whatever their race. `viewer.setBackdrop()` draws it in a pass of its own, seen through the camera baked into the
+model, so the mouse controls never move it:
 
 ```ts
-const backdrop = await new BackdropBuilder(assets, gameData, viewer.backdropLighting).build(race);
+const backdrop = await new BackdropBuilder(assets, gameData, viewer.backdropLighting).build(race, classId);
 if (backdrop) viewer.setBackdrop(backdrop.instance, backdrop.lighting);
 ```
 
@@ -109,7 +110,7 @@ camera on the character rather than on the pair:
 <Creature assets={assets} displayId={character.pet.displayId} pet={character.pet} position={petPosition} />
 ```
 
-`<Backdrop assets race={1} />` puts that race's character-creation scene behind everything.
+`<Backdrop assets race={1} classId={6} />` puts a character's character-creation scene behind everything.
 
 `useViewer()` gives children the `Viewer`. For other frameworks, `mountInstance(viewer, load, opts)`
 from the core package holds the same lifecycle (load, cancel, add, frame, dispose) behind one disposer, and

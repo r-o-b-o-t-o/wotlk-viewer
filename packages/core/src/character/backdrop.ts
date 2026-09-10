@@ -2,14 +2,29 @@ import type { AssetManager } from "../AssetManager.js";
 import { M2Instance } from "../render/M2Instance.js";
 import type { M2Lighting } from "../render/M2Material.js";
 import type { BackdropLighting, Viewer } from "../render/Viewer.js";
+import { DEATH_KNIGHT_CLASS } from "./constants.js";
 import type { GameData } from "./GameData.js";
+
+/** The scenes a character can be created in, named as `Interface\Glues\Models` names them. */
+const SCENES = [
+	"Human",
+	"Dwarf",
+	"NightElf",
+	"Draenei",
+	"Orc",
+	"Scourge",
+	"Tauren",
+	"BloodElf",
+	"DeathKnight",
+] as const;
+export type BackdropScene = (typeof SCENES)[number];
 
 /**
  * The character-creation scene a race stands in, by `ChrRaces.clientFileString`. Gnomes share the
- * dwarf backdrop and trolls the orc one: `Interface\Glues\Models` holds these eight scenes and no
- * others, and the client's own light table is keyed the same way.
+ * dwarf backdrop and trolls the orc one: the client ships no scene for either, and its own light
+ * table is keyed the same way.
  */
-export const BACKDROP_SCENES: Record<string, string> = {
+const BACKDROP_BY_RACE: Record<string, BackdropScene> = {
 	Human: "Human",
 	Dwarf: "Dwarf",
 	Gnome: "Dwarf",
@@ -22,13 +37,25 @@ export const BACKDROP_SCENES: Record<string, string> = {
 	BloodElf: "BloodElf",
 };
 
+/** Death knights are created in Acherus whatever race they are, so the class wins over the race. */
+const DEATH_KNIGHT_SCENE = "DeathKnight";
+
+/**
+ * Which of the scenes under `Interface\Glues\Models` a character is created in: Acherus for a
+ * death knight, and otherwise the one for its race, named by `ChrRaces.clientFileString`. Undefined
+ * for a race that is not playable and so has no scene.
+ */
+export function backdropScene(clientFileString: string, classId?: number): BackdropScene | undefined {
+	return classId === DEATH_KNIGHT_CLASS ? DEATH_KNIGHT_SCENE : BACKDROP_BY_RACE[clientFileString];
+}
+
 /**
  * `RaceLights` from the client's `Interface\GlueXML\GlueParent.lua`, verbatim: enabled, light type,
  * the direction the light travels, then an ambient intensity with its colour and a diffuse
  * intensity with its colour. Rows with a black diffuse are the scene's ambient term and nothing
  * else. The models carry point lights of their own, which are not read.
  */
-const BACKDROP_LIGHTS: Record<string, number[][]> = {
+const BACKDROP_LIGHTS: Record<BackdropScene, number[][]> = {
 	Human: [
 		[1, 0, 0.0, 0.0, -1.0, 1.0, 0.27, 0.27, 0.27, 1.0, 0.0, 0.0, 0.0],
 		[1, 0, -0.45756075, -0.58900136, -0.66611975, 1.0, 0.0, 0.0, 0.0, 1.0, 0.19882353, 0.34921569, 0.43588236],
@@ -59,13 +86,15 @@ const BACKDROP_LIGHTS: Record<string, number[][]> = {
 		[1, 0, 0.0, -0.0, -1.0, 1.0, 0.60392, 0.6149, 0.7, 1.0, 0.0, 0.0, 0.0],
 		[1, 0, 0.02575, 0.86518, -0.50081, 1.0, 0.0, 0.0, 0.0, 1.0, 0.59137, 0.51745, 0.63471],
 	],
+	DeathKnight: [[1, 0, 0.0, 0.0, -1.0, 1.0, 0.38824, 0.66353, 0.76941, 1.0, 0.0, 0.0, 0.0]],
 };
 
 /**
  * `CharModelFogInfo` from the same file: fog colour and the distance at which it is complete. The
- * draenei and blood elf scenes are listed nowhere there, and the client leaves them clear.
+ * draenei, blood elf and death knight scenes are listed nowhere there, and the client leaves them
+ * clear.
  */
-const BACKDROP_FOG: Record<string, { color: [number, number, number]; end: number }> = {
+const BACKDROP_FOG: Partial<Record<BackdropScene, { color: [number, number, number]; end: number }>> = {
 	Human: { color: [0.8, 0.65, 0.73], end: 222 },
 	Orc: { color: [0.5, 0.5, 0.5], end: 270 },
 	Dwarf: { color: [0.85, 0.88, 1.0], end: 500 },
@@ -81,7 +110,7 @@ export interface Backdrop {
 }
 
 /** Sums the ambient a scene's rows contribute and keeps the ones that also light a direction. */
-function backdropLighting(name: string): BackdropLighting {
+function backdropLighting(name: BackdropScene): BackdropLighting {
 	const rows = BACKDROP_LIGHTS[name];
 	const ambient: [number, number, number] = [0, 0, 0];
 	const lights: BackdropLighting["lights"] = [];
@@ -103,9 +132,12 @@ export class BackdropBuilder {
 		readonly lighting: M2Lighting,
 	) {}
 
-	/** Null for a race with no scene of its own; every playable race has one. */
-	async build(race: number): Promise<Backdrop | null> {
-		const name = BACKDROP_SCENES[(await this.data.races()).get(race)?.clientFileString ?? ""];
+	/**
+	 * The scene for a race, or Acherus when `classId` is the death knight one. Null for a race with
+	 * no scene of its own; every playable race has one.
+	 */
+	async build(race: number, classId?: number): Promise<Backdrop | null> {
+		const name = backdropScene((await this.data.races()).get(race)?.clientFileString ?? "", classId);
 		if (!name) return null;
 		const model = await this.assets.loadModel(`Interface\\Glues\\Models\\UI_${name}\\UI_${name}.m2`);
 		return {

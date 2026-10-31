@@ -159,6 +159,12 @@ export class ParticleSystem {
 	private readonly upDirection: boolean;
 	/** Kill a particle the moment it moves away from the emitter's origin. */
 	private readonly implode: boolean;
+	/** Write the quads back to front rather than in array order. */
+	private readonly sorted: boolean;
+	/** Particle indices, farthest first; refilled every frame a sorted emitter draws. */
+	private readonly sortOrder: number[] = [];
+	/** Each particle's depth towards the camera, indexed as the particles are. Empty unless sorting. */
+	private readonly sortDepth: Float32Array;
 	/** Whether the edge has already fired, so it takes a quiet frame to arm again. */
 	private burstFired = false;
 	/**
@@ -208,6 +214,8 @@ export class ParticleSystem {
 		const sphere = emitter.emitterType === 2;
 		this.upDirection = sphere && (emitter.flags & M2ParticleFlags.HemisphereUpDirection) !== 0;
 		this.implode = sphere && (emitter.flags & M2ParticleFlags.ImplosionFilter) !== 0;
+		this.sorted = (emitter.flags & M2ParticleFlags.SortParticles) !== 0;
+		this.sortDepth = new Float32Array(this.sorted ? maxParticles : 0);
 		this.twinkleBase = emitter.twinkleScale[0];
 		this.twinkleSpan = emitter.twinkleScale[1] - this.twinkleBase;
 		this.twinkleOnOff = emitter.twinklePercent;
@@ -469,6 +477,25 @@ export class ParticleSystem {
 		p[o + 12] = this.twinkleCounter++ & 0x7f;
 	}
 
+	/**
+	 * Fills `sortOrder` farthest first, which is the order an Alpha blend has to composite in — and
+	 * every emitter that asks to sort is an Alpha blend. The basis arrives in whichever space the
+	 * particles live in, and its back axis grows towards the viewer, so the smallest depth is the
+	 * farthest particle.
+	 */
+	private sortByDepth(basis: BillboardBasis): void {
+		const p = this.particles;
+		const depth = this.sortDepth;
+		const order = this.sortOrder;
+		order.length = this.count;
+		for (let i = 0; i < this.count; i++) {
+			const o = i * STRIDE;
+			order[i] = i;
+			depth[i] = p[o] * basis.back.x + p[o + 1] * basis.back.y + p[o + 2] * basis.back.z;
+		}
+		order.sort((a, b) => depth[a] - depth[b]);
+	}
+
 	private buildQuads(basis: BillboardBasis): void {
 		const e = this.emitter;
 		const cols = Math.max(1, e.textureCols);
@@ -476,7 +503,9 @@ export class ParticleSystem {
 		const clampTail = (e.flags & M2ParticleFlags.ClampTailToAge) !== 0;
 		const p = this.particles;
 		let quad = 0;
-		for (let i = 0; i < this.count; i++) {
+		if (this.sorted) this.sortByDepth(basis);
+		for (let n = 0; n < this.count; n++) {
+			const i = this.sorted ? this.sortOrder[n] : n;
 			const o = i * STRIDE;
 			const age = p[o + 6];
 			const t = age / p[o + 7];

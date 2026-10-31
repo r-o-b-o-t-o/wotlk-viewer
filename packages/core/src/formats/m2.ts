@@ -307,6 +307,7 @@ export const M2ParticleFlags = {
 	 * — which only one emitter in the whole client asks for with the bit clear.
 	 */
 	Unlit: 0x1,
+	/** Draw this emitter's own particles back to front. Every emitter asking is an Alpha blend. */
 	SortParticles: 0x2,
 	/** Billboard aligns along the velocity vector. */
 	VelocityOrient: 0x4,

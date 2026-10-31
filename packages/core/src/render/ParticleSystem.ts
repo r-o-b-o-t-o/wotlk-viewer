@@ -490,7 +490,9 @@ export class ParticleSystem {
 		p[o + 10] = e.baseSpin + e.baseSpinVary * rand2();
 		// NegateSpinRandom sends half the particles the other way round.
 		const flip = e.flags & M2ParticleFlags.NegateSpinRandom && Math.random() < 0.5 ? -1 : 1;
-		p[o + 11] = (e.spin + e.spinVary * rand2()) * flip;
+		// Crossed over, as the client crosses them loading the emitter: the rate is the field the
+		// format calls the variation, and the variation is the one it calls the spin.
+		p[o + 11] = (e.spinVary + e.spin * rand2()) * flip;
 		// The client indexes the twinkle table by the particle's slot, which it keeps for life. Ours
 		// move as the array compacts, so each particle carries the offset it was born with instead.
 		p[o + 12] = this.twinkleCounter++ & 0x7f;

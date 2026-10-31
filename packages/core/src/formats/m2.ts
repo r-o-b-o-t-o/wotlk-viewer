@@ -287,7 +287,13 @@ export interface M2ParticleEmitter {
 	drag: number;
 	baseSpin: number;
 	baseSpinVary: number;
+	/**
+	 * Named as the format names them, which is the other way round from how they are used: the client
+	 * crosses the pair over as it loads the emitter, taking `spinVary` as the turn rate and `spin` as
+	 * the variation on it. The two differ on 15,039 emitters, so the distinction is not academic.
+	 */
 	spin: number;
+	/** The turn rate, despite the name; see `spin`. */
 	spinVary: number;
 	tumbleMin: [number, number, number];
 	tumbleMax: [number, number, number];

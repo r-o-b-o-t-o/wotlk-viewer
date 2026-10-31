@@ -487,9 +487,10 @@ export class ParticleSystem {
 				? Math.floor(Math.random() * e.textureRows * e.textureCols)
 				: -1;
 		p[o + 9] = 1 + e.scaleVary[0] * rand2();
-		p[o + 10] = e.baseSpin + e.baseSpinVary * rand2();
-		// NegateSpinRandom sends half the particles the other way round.
+		// NegateSpinRandom sends half the particles the other way round. The client turns over the
+		// whole angle it has built, so the angle they were born at goes with the rate.
 		const flip = e.flags & M2ParticleFlags.NegateSpinRandom && Math.random() < 0.5 ? -1 : 1;
+		p[o + 10] = (e.baseSpin + e.baseSpinVary * rand2()) * flip;
 		// Crossed over, as the client crosses them loading the emitter: the rate is the field the
 		// format calls the variation, and the variation is the one it calls the spin.
 		p[o + 11] = (e.spinVary + e.spin * rand2()) * flip;

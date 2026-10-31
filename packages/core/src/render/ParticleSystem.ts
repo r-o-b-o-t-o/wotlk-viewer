@@ -80,6 +80,8 @@ const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
 /** Gravity for an emitter simulating in its own frame: that frame's -Z, which is what the client pulls along. */
 const LOCAL_DOWN = new Vector3(0, 0, -1);
+/** The longest the client lets an emitter step at once (`s_maxTimeStep`), in seconds. */
+const MAX_STEP = 0.1;
 /**
  * The quarter turn about Z the client slips between an emitter and its bone (`M2Model.cpp`): a
  * particle is turned in the emitter's own coordinates and the emitter's offset added after, which
@@ -352,11 +354,42 @@ export class ParticleSystem {
 			}
 		}
 
-		const g = animator.sampleScalar(e.gravity, "float", 0) * dt;
+		// The tracks are read once a frame, as the client reads them, and held across the steps.
+		const gravity = animator.sampleScalar(e.gravity, "float", 0);
+		const visible = animator.sampleScalar(e.enabledIn, "u8", 1) !== 0;
+		const tracked = animator.sampleScalar(e.emissionRate, "float", 0);
+		const lifespan = animator.sampleScalar(e.lifespan, "float", 1);
+		// A long frame is walked in steps of at most `MAX_STEP`, as `InternalUpdate` walks it, so a
+		// hitch cannot fling particles a whole frame's worth of travel in one go.
+		// A frame of less than no time steps nothing, which is what `InternalUpdate` falls back on.
+		let left = Math.max(dt, 0);
+		do {
+			const step = Math.min(left, MAX_STEP);
+			left -= step;
+			this.stepParticles(step, animator, down, gravity, visible, tracked, lifespan);
+			// Whatever is left of an exact multiple is float noise, not time worth stepping.
+		} while (left > 1e-6);
+
+		this.buildQuads(basis);
+	}
+
+	/** Ages and moves the live particles by `step`, then emits what that much time has earned. */
+	private stepParticles(
+		step: number,
+		animator: M2Animator,
+		down: Vector3,
+		gravity: number,
+		visible: boolean,
+		tracked: number,
+		lifespan: number,
+	): void {
+		const e = this.emitter;
+		const p = this.particles;
+		const g = gravity * step;
 		const gx = down.x * g;
 		const gy = down.y * g;
 		const gz = down.z * g;
-		const drag = Math.max(0, 1 - e.drag * dt);
+		const drag = Math.max(0, 1 - e.drag * step);
 		// Where the emitter sits in the space the particles are simulated in, which implosion measures
 		// against; `toSim` is the identity for a local-frame emitter, putting it at the origin as the
 		// client's own test does.
@@ -365,21 +398,21 @@ export class ParticleSystem {
 		const oz = this.toSim.elements[14];
 		for (let i = 0; i < this.count;) {
 			const o = i * STRIDE;
-			p[o + 6] += dt;
+			p[o + 6] += step;
 			let alive = p[o + 6] < p[o + 7];
 			if (alive) {
 				p[o + 3] = (p[o + 3] + gx) * drag;
 				p[o + 4] = (p[o + 4] + gy) * drag;
 				p[o + 5] = (p[o + 5] + gz) * drag;
-				p[o] += p[o + 3] * dt;
-				p[o + 1] += p[o + 4] * dt;
-				p[o + 2] += p[o + 5] * dt;
+				p[o] += p[o + 3] * step;
+				p[o + 1] += p[o + 4] * step;
+				p[o + 2] += p[o + 5] * step;
 				// Implosion kills whatever the step just taken carried outwards, so a shell converging
 				// on the centre stops there instead of passing through and flying out the far side. The
 				// client measures the step, not the velocity, so a frame of no time kills nothing.
 				if (this.implode) {
 					const away = (p[o] - ox) * p[o + 3] + (p[o + 1] - oy) * p[o + 4] + (p[o + 2] - oz) * p[o + 5];
-					alive = away * dt <= 0;
+					alive = away * step <= 0;
 				}
 			}
 			if (alive) {
@@ -391,9 +424,6 @@ export class ParticleSystem {
 		}
 
 		// Spawn new ones.
-		const visible = animator.sampleScalar(e.enabledIn, "u8", 1) !== 0;
-		const tracked = animator.sampleScalar(e.emissionRate, "float", 0);
-		const lifespan = animator.sampleScalar(e.lifespan, "float", 1);
 		if (this.squirt) {
 			// A squirt emitter never streams: the client leaves its "emitting" bit clear for good and
 			// instead fires a single burst of `rate` particles each time the rate track rises above zero
@@ -421,8 +451,11 @@ export class ParticleSystem {
 			// the client, and none at all at the common ones.
 			this.grow(lifespan, tracked);
 			const rate = tracked + e.emissionRateVary * rand2();
-			this.emitAccumulator = Math.max(this.emitAccumulator + rate * dt, -1);
-			const n = Math.max(0, Math.floor(this.emitAccumulator));
+			this.emitAccumulator = Math.max(this.emitAccumulator + rate * step, -1);
+			// The client rounds what it is owed rather than flooring it, so a particle lands as soon as
+			// half of one has been earned. Either reading emits the same count over time, since what
+			// goes out comes off the tally; this one places them where the client places them.
+			const n = Math.max(0, Math.round(this.emitAccumulator));
 			// Only what a free slot was found for comes off the accumulator, as in the client: a full
 			// pool holds the rest back as credit rather than dropping it. Emitters whose pool is as
 			// tight as their steady state sit at that edge for a good part of the time.
@@ -433,8 +466,6 @@ export class ParticleSystem {
 			}
 			this.emitAccumulator -= emitted;
 		}
-
-		this.buildQuads(basis);
 	}
 
 	/**

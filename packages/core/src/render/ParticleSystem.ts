@@ -390,6 +390,8 @@ export class ParticleSystem {
 		const gy = down.y * g;
 		const gz = down.z * g;
 		const drag = Math.max(0, 1 - e.drag * step);
+		// Half the step, for the -g*step^2/2 the client puts straight into the position.
+		const half = step * 0.5;
 		// Where the emitter sits in the space the particles are simulated in, which implosion measures
 		// against; `toSim` is the identity for a local-frame emitter, putting it at the origin as the
 		// client's own test does.
@@ -401,18 +403,24 @@ export class ParticleSystem {
 			p[o + 6] += step;
 			let alive = p[o + 6] < p[o + 7];
 			if (alive) {
+				// `MoveParticle` moves on the velocity the particle came in with and only then drops
+				// that velocity, which lets it put the exact -g*step^2/2 of the fall into the position.
+				// Dropping the velocity first, as this used to, spends a whole step of gravity on the
+				// move and leaves the position trailing by half a step of it, every step.
+				const mx = p[o + 3] * step;
+				const my = p[o + 4] * step;
+				const mz = p[o + 5] * step;
+				p[o] += mx + gx * half;
+				p[o + 1] += my + gy * half;
+				p[o + 2] += mz + gz * half;
 				p[o + 3] = (p[o + 3] + gx) * drag;
 				p[o + 4] = (p[o + 4] + gy) * drag;
 				p[o + 5] = (p[o + 5] + gz) * drag;
-				p[o] += p[o + 3] * step;
-				p[o + 1] += p[o + 4] * step;
-				p[o + 2] += p[o + 5] * step;
-				// Implosion kills whatever the step just taken carried outwards, so a shell converging
-				// on the centre stops there instead of passing through and flying out the far side. The
-				// client measures the step, not the velocity, so a frame of no time kills nothing.
+				// Implosion kills whatever the move just made carried outwards, so a shell converging on
+				// the centre stops there instead of passing through and flying out the far side. It is
+				// the move the client measures, so a frame of no time kills nothing.
 				if (this.implode) {
-					const away = (p[o] - ox) * p[o + 3] + (p[o + 1] - oy) * p[o + 4] + (p[o + 2] - oz) * p[o + 5];
-					alive = away * step <= 0;
+					alive = (p[o] - ox) * mx + (p[o + 1] - oy) * my + (p[o + 2] - oz) * mz <= 0;
 				}
 			}
 			if (alive) {

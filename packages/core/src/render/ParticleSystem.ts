@@ -129,6 +129,10 @@ export class ParticleSystem {
 	private readonly quadsPer: number;
 	/** Simulate in the emitter's own frame rather than shedding into the scene. */
 	private readonly localFrame: boolean;
+	/** Fire one burst per rising edge of the rate track instead of streaming. */
+	private readonly squirt: boolean;
+	/** Whether the edge has already fired, so it takes a quiet frame to arm again. */
+	private burstFired = false;
 	/** The emitter's own frame: its bone, offset to the emitter's origin. */
 	private readonly emitterFrame = new Matrix4();
 	/** Emitter frame -> simulation space, applied to a particle once, at birth. */
@@ -163,6 +167,7 @@ export class ParticleSystem {
 		this.head = !this.tail || (emitter.flags & M2ParticleFlags.HeadStyle) !== 0;
 		this.quadsPer = (this.head ? 1 : 0) + (this.tail ? 1 : 0);
 		this.localFrame = (emitter.flags & M2ParticleFlags.LocalFrame) !== 0;
+		this.squirt = (emitter.flags & M2ParticleFlags.Squirt) !== 0;
 		this.twinkleBase = emitter.twinkleScale[0];
 		this.twinkleSpan = emitter.twinkleScale[1] - this.twinkleBase;
 		this.twinkleOnOff = emitter.twinklePercent;
@@ -273,18 +278,34 @@ export class ParticleSystem {
 			i++;
 		}
 
-		// Spawn new ones. The variation is a count per second to add, not a fraction to scale by, so it
-		// can pull the rate below zero, and the client lets that drain the accumulator — throttling the
-		// emitter until it climbs back, which is what keeps its average rate the one the track asks for.
-		//
-		// The debt is held to a single particle. Without a floor it is a random walk, and the 23 emitters
-		// that pair a variation with a rate of zero wander far enough negative to go silent for good;
-		// the client reaches that state too and empties its free list in one frame instead. Capping the
-		// debt hands a little of it back, but only to emitters asking for nothing in the first place:
-		// at a rate of zero it leaks 2.5 particles a second at the largest variation in the client, and
-		// none at all at the common ones.
-		if (animator.sampleScalar(e.enabledIn, "u8", 1) !== 0) {
-			const rate = animator.sampleScalar(e.emissionRate, "float", 0) + e.emissionRateVary * rand2();
+		// Spawn new ones.
+		const visible = animator.sampleScalar(e.enabledIn, "u8", 1) !== 0;
+		const tracked = animator.sampleScalar(e.emissionRate, "float", 0);
+		if (this.squirt) {
+			// A squirt emitter never streams: the client leaves its "emitting" bit clear for good and
+			// instead fires a single burst of `rate` particles each time the rate track rises above zero
+			// while the emitter is visible, then waits for that edge to come round again. 597 of the 630
+			// squirt emitters animate that track, so the burst lands once per cycle of the animation.
+			// A burst of fewer than zero is held at none, where the client counts down past it and
+			// empties its free list in one frame.
+			const armed = visible && tracked > 0;
+			if (armed && !this.burstFired) {
+				const burst = Math.max(0, Math.floor(tracked + e.emissionRateVary * rand2()));
+				for (let i = 0; i < burst && this.count < this.maxParticles; i++) this.spawn(animator);
+			}
+			this.burstFired = armed;
+		} else if (visible) {
+			// The variation is a count per second to add, not a fraction to scale by, so it can pull the
+			// rate below zero, and the client lets that drain the accumulator — throttling the emitter
+			// until it climbs back, which is what keeps its average the rate the track asks for.
+			//
+			// The debt is held to a single particle. Without a floor it is a random walk, and the 23
+			// emitters that pair a variation with a rate of zero wander far enough negative to go silent
+			// for good; the client reaches that state too and empties its free list in one frame instead.
+			// Capping the debt hands a little of it back, but only to emitters asking for nothing in the
+			// first place: at a rate of zero it leaks 2.5 particles a second at the largest variation in
+			// the client, and none at all at the common ones.
+			const rate = tracked + e.emissionRateVary * rand2();
 			this.emitAccumulator = Math.max(this.emitAccumulator + rate * dt, -1);
 			const n = Math.max(0, Math.floor(this.emitAccumulator));
 			this.emitAccumulator -= n;

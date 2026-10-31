@@ -330,6 +330,10 @@ export const M2ParticleFlags = {
 	/** Tail reaches back at most as far as the particle has lived. */
 	ClampTailToAge: 0x400,
 	InheritPosition: 0x800,
+	/**
+	 * Head quad lies flat in the frame its particles were born in rather than facing the camera. A
+	 * tail is unaffected.
+	 */
 	XyQuad: 0x1000,
 	ProjectParticle: 0x2000,
 	FollowPosition: 0x4000,

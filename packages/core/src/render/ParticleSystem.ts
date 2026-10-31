@@ -79,6 +79,9 @@ const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
 /** Gravity for an emitter simulating in its own frame: that frame's -Z, which is what the client pulls along. */
 const LOCAL_DOWN = new Vector3(0, 0, -1);
+/** The plane an XyQuad emitter lays its head quads in, in the space its particles live in. */
+const tmpQuadX = new Vector3();
+const tmpQuadY = new Vector3();
 /**
  * The 128 uniform values a twinkle index looks up. The client fills its own table from `rand()` at
  * startup, so even its own runs disagree on the numbers; any fixed uniform set is as faithful, and
@@ -159,6 +162,8 @@ export class ParticleSystem {
 	private readonly upDirection: boolean;
 	/** Kill a particle the moment it moves away from the emitter's origin. */
 	private readonly implode: boolean;
+	/** Lay the head quad flat in the frame its particles were born in, not facing the camera. */
+	private readonly xyQuad: boolean;
 	/** Write the quads back to front rather than in array order. */
 	private readonly sorted: boolean;
 	/** Particle indices, farthest first; refilled every frame a sorted emitter draws. */
@@ -214,6 +219,7 @@ export class ParticleSystem {
 		const sphere = emitter.emitterType === 2;
 		this.upDirection = sphere && (emitter.flags & M2ParticleFlags.HemisphereUpDirection) !== 0;
 		this.implode = sphere && (emitter.flags & M2ParticleFlags.ImplosionFilter) !== 0;
+		this.xyQuad = (emitter.flags & M2ParticleFlags.XyQuad) !== 0;
 		this.sorted = (emitter.flags & M2ParticleFlags.SortParticles) !== 0;
 		this.sortDepth = new Float32Array(this.sorted ? maxParticles : 0);
 		this.twinkleBase = emitter.twinkleScale[0];
@@ -314,6 +320,19 @@ export class ParticleSystem {
 		}
 		// The mesh's matrix is set after the viewer walked the graph, so ask for one more composition.
 		this.mesh.matrixWorldNeedsUpdate = true;
+
+		if (this.xyQuad) {
+			// The plane is the one the particles were born in. A local-frame emitter simulates in that
+			// frame already, so its own axes are the plain ones; a shed emitter's particles sit in the
+			// scene, where the client lays the quad in the model's plane rather than the bone's.
+			if (this.localFrame) {
+				tmpQuadX.set(1, 0, 0);
+				tmpQuadY.set(0, 1, 0);
+			} else {
+				tmpQuadX.setFromMatrixColumn(frames.world, 0).normalize();
+				tmpQuadY.setFromMatrixColumn(frames.world, 1).normalize();
+			}
+		}
 
 		const g = animator.sampleScalar(e.gravity, "float", 0) * dt;
 		const gx = down.x * g;
@@ -503,6 +522,9 @@ export class ParticleSystem {
 		const clampTail = (e.flags & M2ParticleFlags.ClampTailToAge) !== 0;
 		const p = this.particles;
 		let quad = 0;
+		// Only the head quad takes the XyQuad plane; the client builds a tail across the view either way.
+		const headRight = this.xyQuad ? tmpQuadX : basis.right;
+		const headUp = this.xyQuad ? tmpQuadY : basis.up;
 		if (this.sorted) this.sortByDepth(basis);
 		for (let n = 0; n < this.count; n++) {
 			const i = this.sorted ? this.sortOrder[n] : n;
@@ -541,10 +563,10 @@ export class ParticleSystem {
 				const angle = p[o + 10] + p[o + 11] * age;
 				const cos = Math.cos(angle),
 					sin = Math.sin(angle);
-				tmpAcross.copy(basis.right).multiplyScalar(cos * sx);
-				tmpAcross.addScaledVector(basis.up, sin * sx);
-				tmpAlong.copy(basis.up).multiplyScalar(cos * sy);
-				tmpAlong.addScaledVector(basis.right, -sin * sy);
+				tmpAcross.copy(headRight).multiplyScalar(cos * sx);
+				tmpAcross.addScaledVector(headUp, sin * sx);
+				tmpAlong.copy(headUp).multiplyScalar(cos * sy);
+				tmpAlong.addScaledVector(headRight, -sin * sy);
 				this.writeQuad(quad++, x, y, z, cu, cv, cols, rows, r, g, b, a);
 			}
 			if (this.tail) {

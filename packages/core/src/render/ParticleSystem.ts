@@ -62,8 +62,9 @@ void main() {
 `;
 
 // Particle state layout: x y z vx vy vz age life cell scaleMul spin spinRate twinkle
-// (cell < 0 = follow the head cell track; spin is the angle at birth, in radians; twinkle is the
-// particle's own offset into TWINKLE_TABLE, standing in for the slot the client indexes by)
+// (cell is the one a quad falls back on where it has no cell track; spin is the angle at birth, in
+// radians; twinkle is the particle's own offset into TWINKLE_TABLE, standing in for the slot the
+// client indexes by)
 const STRIDE = 13;
 // Quad corners as (right, up, cellU, cellV): (-r,+u) (+r,+u) (+r,-u) (-r,-u).
 const CORNERS = new Int8Array([-1, 1, 0, 0, 1, 1, 1, 0, 1, -1, 1, 1, -1, -1, 0, 1]);
@@ -123,6 +124,13 @@ function samplePart(track: M2PartTrack, t: number, out: Float32Array, fallback: 
 		return;
 	}
 	sampleTrack(track, t, out);
+}
+
+/** The texture cell a quad draws at life fraction `t`, or `fallback` where the track has no keys. */
+function cellAt(track: M2PartTrack, t: number, fallback: number): number {
+	if (track.times.length === 0) return fallback;
+	sampleTrack(track, t, tmpV);
+	return Math.round(tmpV[0]);
 }
 
 /**
@@ -482,10 +490,12 @@ export class ParticleSystem {
 		p[o + 5] = tmpDir.z;
 		p[o + 6] = 0;
 		p[o + 7] = life;
+		// The client reaches for a random cell only where the head has no track of its own, so this is
+		// a fallback rather than an override — and no emitter in the client asks for both.
 		p[o + 8] =
 			e.flags & M2ParticleFlags.ChooseRandomTexture
 				? Math.floor(Math.random() * e.textureRows * e.textureCols)
-				: -1;
+				: 0;
 		p[o + 9] = 1 + e.scaleVary[0] * rand2();
 		// NegateSpinRandom sends half the particles the other way round. The client turns over the
 		// whole angle it has built, so the angle they were born at goes with the rate.
@@ -550,13 +560,6 @@ export class ParticleSystem {
 			// both components, so a zero height is intentional.
 			const sx = tmpV[0] * p[o + 9] * this.sizeScale * twinkleScale;
 			const sy = tmpV[1] * p[o + 9] * this.sizeScale * twinkleScale;
-			let cell = p[o + 8];
-			if (cell < 0) {
-				samplePart(e.headCell, t, tmpV, 0);
-				cell = Math.round(tmpV[0]);
-			}
-			const cu = (cell % cols) / cols;
-			const cv = Math.floor(cell / cols) / rows;
 			const x = p[o],
 				y = p[o + 1],
 				z = p[o + 2];
@@ -570,7 +573,8 @@ export class ParticleSystem {
 				tmpAcross.addScaledVector(headUp, sin * sx);
 				tmpAlong.copy(headUp).multiplyScalar(cos * sy);
 				tmpAlong.addScaledVector(headRight, -sin * sy);
-				this.writeQuad(quad++, x, y, z, cu, cv, cols, rows, r, g, b, a);
+				// The particle's random cell stands in only where the head has no track of its own.
+				this.writeQuad(quad++, x, y, z, cellAt(e.headCell, t, p[o + 8]), cols, rows, r, g, b, a);
 			}
 			if (this.tail) {
 				// A tail is stretched back over the ground the particle covered in `tailLength` seconds,
@@ -580,7 +584,9 @@ export class ParticleSystem {
 				tmpAcross.crossVectors(tmpAlong, basis.back);
 				if (tmpAcross.lengthSq() < 1e-12) tmpAcross.copy(basis.right); // standing still: no axis to lie along
 				tmpAcross.setLength(sx);
-				this.writeQuad(quad++, x - tmpAlong.x, y - tmpAlong.y, z - tmpAlong.z, cu, cv, cols, rows, r, g, b, a);
+				// A tail has no random fallback in the client, so an empty track means cell zero.
+				const cell = cellAt(e.tailCell, t, 0);
+				this.writeQuad(quad++, x - tmpAlong.x, y - tmpAlong.y, z - tmpAlong.z, cell, cols, rows, r, g, b, a);
 			}
 		}
 		// Twinkle can drop particles, so the range follows the quads actually written, not the count.
@@ -595,14 +601,13 @@ export class ParticleSystem {
 		}
 	}
 
-	/** Writes one quad centred on `x,y,z`, spanning `tmpAcross` and `tmpAlong`. */
+	/** Writes one quad centred on `x,y,z`, spanning `tmpAcross` and `tmpAlong`, from texture `cell`. */
 	private writeQuad(
 		quad: number,
 		x: number,
 		y: number,
 		z: number,
-		cu: number,
-		cv: number,
+		cell: number,
 		cols: number,
 		rows: number,
 		r: number,
@@ -613,6 +618,8 @@ export class ParticleSystem {
 		const pos = this.positions;
 		const uv = this.uvs;
 		const col = this.colors;
+		const cu = (cell % cols) / cols;
+		const cv = Math.floor(cell / cols) / rows;
 		const v = quad * 4;
 		for (let c = 0; c < 4; c++) {
 			const k = c * 4;

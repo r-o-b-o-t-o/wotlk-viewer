@@ -155,6 +155,10 @@ export class ParticleSystem {
 	private readonly localFrame: boolean;
 	/** Fire one burst per rising edge of the rate track instead of streaming. */
 	private readonly squirt: boolean;
+	/** Send a sphere's particles up its own Z instead of out along the radius they were born on. */
+	private readonly upDirection: boolean;
+	/** Kill a particle the moment it moves away from the emitter's origin. */
+	private readonly implode: boolean;
 	/** Whether the edge has already fired, so it takes a quiet frame to arm again. */
 	private burstFired = false;
 	/**
@@ -199,6 +203,11 @@ export class ParticleSystem {
 		this.quadsPer = (this.head ? 1 : 0) + (this.tail ? 1 : 0);
 		this.localFrame = (emitter.flags & M2ParticleFlags.LocalFrame) !== 0;
 		this.squirt = (emitter.flags & M2ParticleFlags.Squirt) !== 0;
+		// Both of these reach the client only through its sphere emitter, so a plane emitter setting
+		// one keeps its particles — which two emitters on `Axe_1H_BlackSmithing_D_03` depend on.
+		const sphere = emitter.emitterType === 2;
+		this.upDirection = sphere && (emitter.flags & M2ParticleFlags.HemisphereUpDirection) !== 0;
+		this.implode = sphere && (emitter.flags & M2ParticleFlags.ImplosionFilter) !== 0;
 		this.twinkleBase = emitter.twinkleScale[0];
 		this.twinkleSpan = emitter.twinkleScale[1] - this.twinkleBase;
 		this.twinkleOnOff = emitter.twinklePercent;
@@ -303,21 +312,37 @@ export class ParticleSystem {
 		const gy = down.y * g;
 		const gz = down.z * g;
 		const drag = Math.max(0, 1 - e.drag * dt);
+		// Where the emitter sits in the space the particles are simulated in, which implosion measures
+		// against; `toSim` is the identity for a local-frame emitter, putting it at the origin as the
+		// client's own test does.
+		const ox = this.toSim.elements[12];
+		const oy = this.toSim.elements[13];
+		const oz = this.toSim.elements[14];
 		for (let i = 0; i < this.count;) {
 			const o = i * STRIDE;
 			p[o + 6] += dt;
-			if (p[o + 6] >= p[o + 7]) {
+			let alive = p[o + 6] < p[o + 7];
+			if (alive) {
+				p[o + 3] = (p[o + 3] + gx) * drag;
+				p[o + 4] = (p[o + 4] + gy) * drag;
+				p[o + 5] = (p[o + 5] + gz) * drag;
+				p[o] += p[o + 3] * dt;
+				p[o + 1] += p[o + 4] * dt;
+				p[o + 2] += p[o + 5] * dt;
+				// Implosion kills whatever the step just taken carried outwards, so a shell converging
+				// on the centre stops there instead of passing through and flying out the far side. The
+				// client measures the step, not the velocity, so a frame of no time kills nothing.
+				if (this.implode) {
+					const away = (p[o] - ox) * p[o + 3] + (p[o + 1] - oy) * p[o + 4] + (p[o + 2] - oz) * p[o + 5];
+					alive = away * dt <= 0;
+				}
+			}
+			if (alive) {
+				i++;
+			} else {
 				this.count--;
 				p.copyWithin(o, this.count * STRIDE, this.count * STRIDE + STRIDE);
-				continue;
 			}
-			p[o + 3] = (p[o + 3] + gx) * drag;
-			p[o + 4] = (p[o + 4] + gy) * drag;
-			p[o + 5] = (p[o + 5] + gz) * drag;
-			p[o] += p[o + 3] * dt;
-			p[o + 1] += p[o + 4] * dt;
-			p[o + 2] += p[o + 5] * dt;
-			i++;
 		}
 
 		// Spawn new ones.
@@ -407,6 +432,8 @@ export class ParticleSystem {
 			tmpDir.set(Math.cos(polar) * Math.cos(azimuth), Math.cos(polar) * Math.sin(azimuth), Math.sin(polar));
 			const radius = length + (width - length) * Math.random();
 			tmpPos.copy(tmpDir).multiplyScalar(radius);
+			// Despite the name this is no spawn shape: the position above stands, only the travel turns.
+			if (this.upDirection) tmpDir.set(0, 0, 1);
 		} else {
 			// Plane: spawn in a rectangle, moving along +Z within the given cone. The length runs along the
 			// bone's X axis (weapon glows span the blade with it), the width along Y.

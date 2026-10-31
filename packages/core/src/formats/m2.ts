@@ -320,8 +320,9 @@ export const M2ParticleFlags = {
 	LocalFrame: 0x10,
 	InheritBoneScale: 0x20,
 	InheritVelocity: 0x40,
-	/** Kills particles moving away from the centre. */
+	/** Kills a particle once it moves away from the emitter. Sphere emitters only. */
 	ImplosionFilter: 0x80,
+	/** Sends a sphere's particles up its own Z rather than out along the radius. Sphere emitters only. */
 	HemisphereUpDirection: 0x100,
 	/** Half the particles spin the other way. */
 	NegateSpinRandom: 0x200,

@@ -222,8 +222,10 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   Decal, Fade and Envmap ops are not modelled and fall back to a modulate. Batches never carry more than two
   textures.
 - Particle `zSource`, which aims the emission away from a point on the emitter's Z axis, is deliberately skipped.
-  It reaches about 14 base models, nearly all rifles and shotguns firing a muzzle flash, and was triaged as not
-  worth the code.
+  It reaches 163 base models, 48 of them items — every one a rifle or shotgun firing a muzzle flash bar the
+  Transcendence priest helm — and was triaged as not worth the code. The client reads it ahead of
+  `HemisphereUpDirection`, so the 76 sphere emitters carrying both take the up direction here where the client
+  aims them away from the source instead; none of those is on an item.
 - Bezier tracks are treated as hermite.
 - Sequence switching is instant (no `blendTime` cross-fade) and Stand variations are not randomized (always variation 0
   unless you pass one).

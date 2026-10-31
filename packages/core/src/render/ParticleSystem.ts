@@ -37,9 +37,10 @@ void main() {
 }
 `;
 
-// Particle state layout: x y z vx vy vz age life cell scaleMul spin spinRate
-// (cell < 0 = follow the head cell track; spin is the angle at birth, in radians)
-const STRIDE = 12;
+// Particle state layout: x y z vx vy vz age life cell scaleMul spin spinRate twinkle
+// (cell < 0 = follow the head cell track; spin is the angle at birth, in radians; twinkle is the
+// particle's own offset into TWINKLE_TABLE, standing in for the slot the client indexes by)
+const STRIDE = 13;
 // Quad corners as (right, up, cellU, cellV): (-r,+u) (+r,+u) (+r,-u) (-r,-u).
 const CORNERS = new Int8Array([-1, 1, 0, 0, 1, 1, 1, 0, 1, -1, 1, 1, -1, -1, 0, 1]);
 const tmpV = new Float32Array(4);
@@ -54,6 +55,20 @@ const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
 /** Gravity for an emitter simulating in its own frame: that frame's -Z, which is what the client pulls along. */
 const LOCAL_DOWN = new Vector3(0, 0, -1);
+/**
+ * The 128 uniform values a twinkle index looks up. The client fills its own table from `rand()` at
+ * startup, so even its own runs disagree on the numbers; any fixed uniform set is as faithful, and
+ * generating ours keeps a given particle's flicker the same from one run to the next.
+ */
+const TWINKLE_TABLE = /* @__PURE__ */ (() => {
+	const table = new Float32Array(128);
+	let state = 0x9e3779b9;
+	for (let i = 0; i < table.length; i++) {
+		state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+		table[i] = state / 0x100000000;
+	}
+	return table;
+})();
 
 /**
  * The frames an instance offers its emitters each frame. Which one an emitter picks is its own
@@ -91,8 +106,8 @@ function samplePart(track: M2PartTrack, t: number, out: Float32Array, fallback: 
  * gravity pulls along the bone's -Z; every other emitter sheds them into the scene at birth and
  * leaves them there, falling along scene down.
  *
- * Simplified: no tumble, wind, twinkle, zSource or spline emitters, and see "Known limitations" in
- * the README for the rest.
+ * Simplified: no tumble, wind, zSource or spline emitters, and see "Known limitations" in the
+ * README for the rest.
  */
 export class ParticleSystem {
 	readonly mesh: Mesh;
@@ -123,6 +138,19 @@ export class ParticleSystem {
 	 * the mesh's own matrix carries for a local-frame emitter but not for one drawn in the scene.
 	 */
 	private sizeScale = 1;
+	/** Hands each particle its own offset into TWINKLE_TABLE, the way the client's slots do. */
+	private twinkleCounter = 0;
+	/**
+	 * Twinkle both resizes a particle and drops it for a frame at a time, from one index into
+	 * TWINKLE_TABLE. The index only moves when one of the two can do anything, matching the client:
+	 * a `twinkleScale` of (1, 1) and a `twinklePercent` of 1 leave it at zero, and the scale a plain 1.
+	 * The range runs min to max, so an emitter writing them the other way round gets a negative span,
+	 * which the client takes as readily.
+	 */
+	private readonly twinkleBase: number;
+	private readonly twinkleSpan: number;
+	private readonly twinkleOnOff: number;
+	private readonly twinkles: boolean;
 
 	constructor(
 		readonly emitter: M2ParticleEmitter,
@@ -135,6 +163,10 @@ export class ParticleSystem {
 		this.head = !this.tail || (emitter.flags & M2ParticleFlags.HeadStyle) !== 0;
 		this.quadsPer = (this.head ? 1 : 0) + (this.tail ? 1 : 0);
 		this.localFrame = (emitter.flags & M2ParticleFlags.LocalFrame) !== 0;
+		this.twinkleBase = emitter.twinkleScale[0];
+		this.twinkleSpan = emitter.twinkleScale[1] - this.twinkleBase;
+		this.twinkleOnOff = emitter.twinklePercent;
+		this.twinkles = this.twinkleOnOff < 1 || this.twinkleSpan !== 0;
 		const quads = maxParticles * this.quadsPer;
 		this.particles = new Float32Array(maxParticles * STRIDE);
 		this.positions = new Float32Array(quads * 4 * 3);
@@ -301,11 +333,12 @@ export class ParticleSystem {
 		// NegateSpinRandom sends half the particles the other way round.
 		const flip = e.flags & M2ParticleFlags.NegateSpinRandom && Math.random() < 0.5 ? -1 : 1;
 		p[o + 11] = (e.spin + e.spinVary * rand2()) * flip;
+		// The client indexes the twinkle table by the particle's slot, which it keeps for life. Ours
+		// move as the array compacts, so each particle carries the offset it was born with instead.
+		p[o + 12] = this.twinkleCounter++ & 0x7f;
 	}
 
 	private buildQuads(basis: BillboardBasis): void {
-		this.geometry.setDrawRange(0, this.count * this.quadsPer * 6);
-		if (this.count === 0) return; // nothing to draw, so nothing to upload
 		const e = this.emitter;
 		const cols = Math.max(1, e.textureCols);
 		const rows = Math.max(1, e.textureRows);
@@ -316,6 +349,11 @@ export class ParticleSystem {
 			const o = i * STRIDE;
 			const age = p[o + 6];
 			const t = age / p[o + 7];
+			// The step count wraps at a byte before the particle's own offset joins it, as in the client.
+			const twinkle = this.twinkles ? ((Math.round(e.twinkleSpeed * age) & 0xff) + p[o + 12]) & 0x7f : 0;
+			// Both halves are the client's: a percent of 1 never drops a particle, whatever the table says.
+			if (this.twinkleOnOff < 1 && this.twinkleOnOff < TWINKLE_TABLE[twinkle]) continue;
+			const twinkleScale = TWINKLE_TABLE[twinkle] * this.twinkleSpan + this.twinkleBase;
 			samplePart(this.color, t, tmpV, 255);
 			const r = tmpV[0] / 255,
 				g = tmpV[1] / 255,
@@ -325,8 +363,8 @@ export class ParticleSystem {
 			samplePart(e.scale, t, tmpV, 1);
 			// Scale is the quad's half-extent, so the sprite spans twice it. The track always carries
 			// both components, so a zero height is intentional.
-			const sx = tmpV[0] * p[o + 9] * this.sizeScale;
-			const sy = tmpV[1] * p[o + 9] * this.sizeScale;
+			const sx = tmpV[0] * p[o + 9] * this.sizeScale * twinkleScale;
+			const sy = tmpV[1] * p[o + 9] * this.sizeScale * twinkleScale;
 			let cell = p[o + 8];
 			if (cell < 0) {
 				samplePart(e.headCell, t, tmpV, 0);
@@ -360,6 +398,9 @@ export class ParticleSystem {
 				this.writeQuad(quad++, x - tmpAlong.x, y - tmpAlong.y, z - tmpAlong.z, cu, cv, cols, rows, r, g, b, a);
 			}
 		}
+		// Twinkle can drop particles, so the range follows the quads actually written, not the count.
+		this.geometry.setDrawRange(0, quad * 6);
+		if (quad === 0) return; // nothing drawn, so nothing to upload
 		// Upload only the live quads instead of the whole buffer.
 		const vertices = quad * 4;
 		for (const attr of this.attributes) {

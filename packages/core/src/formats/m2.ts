@@ -301,8 +301,12 @@ export interface M2ParticleEmitter {
 }
 
 export const M2ParticleFlags = {
-	/** Lit by the scene; the client keeps this bit inverted in its material. */
-	Shaded: 0x1,
+	/**
+	 * Draw flat rather than lit by the scene. The client carries the bit inverted in the material it
+	 * builds for the emitter, and then withholds the lighting a second time from a Mod or Mod2x blend
+	 * — which only one emitter in the whole client asks for with the bit clear.
+	 */
+	Unlit: 0x1,
 	SortParticles: 0x2,
 	/** Billboard aligns along the velocity vector. */
 	VelocityOrient: 0x4,

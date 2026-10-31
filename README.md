@@ -200,6 +200,10 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   `Shoulder_Plate_RaidPaladin_C_01`, which keeps the rest. On top sits a ceiling of `maxParticles`, 512 by default,
   which the client has no equivalent of; 171 emitters ask for more than that and would be thinned here, none of
   them on an item or character model.
+- A particle emitter takes the scene lighting unless its `Unlit` flag is set — 2,393 of the 6,985 emitters on item
+  models — shaded per vertex from the single normal the client hands a whole emitter: straight up in the world.
+  Because this viewer's lights point in view space rather than the world's, that shade swings as the camera orbits,
+  brightest looking down on a model and dimmest looking up, where the client's world-space sun holds it steady.
 - `ParticleColor.dbc` recolouring follows the `ParticleColorID` on `ItemDisplayInfo` and `CreatureDisplayInfo`. An
   emitter also has to ask for a colour set with a `particleColorIndex` of 11, 12 or 13, which narrows it to 38 items
   (all shoulders) and 381 creature displays.

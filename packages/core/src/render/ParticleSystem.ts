@@ -10,18 +10,36 @@ import {
 	Vector3,
 } from "three";
 import type { M2Animator, BillboardBasis } from "../animation/M2Animator.js";
-import { M2ParticleFlags, type M2ParticleEmitter, type M2PartTrack } from "../formats/m2.js";
+import { M2BlendMode, M2ParticleFlags, type M2ParticleEmitter, type M2PartTrack } from "../formats/m2.js";
 import { sampleTrack } from "../animation/tracks.js";
-import { alphaTestFor, applyM2BlendMode } from "./M2Material.js";
+import {
+	alphaTestFor,
+	applyM2BlendMode,
+	LIGHTING_DEFINES,
+	LIGHTING_GLSL,
+	lightingUniforms,
+	type M2Lighting,
+} from "./M2Material.js";
 
 const VERTEX = /* glsl */ `
 attribute vec4 aColor;
 varying vec2 vUv;
 varying vec4 vColor;
+#ifdef LIT
+${LIGHTING_GLSL}
+varying vec3 vLight;
+#endif
 void main() {
   vUv = uv;
   vColor = aColor;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+#ifdef LIT
+  // One normal for every particle of the emitter, straight up in the world: the second column of the
+  // view matrix is that direction in the space the lights are given in. The client shades per vertex
+  // too, so the point lights still vary over the quad.
+  vLight = m2Light(normalize(mat3(viewMatrix)[1]), viewPos.xyz);
+#endif
+  gl_Position = projectionMatrix * viewPos;
 }
 `;
 
@@ -30,9 +48,15 @@ uniform sampler2D uTex;
 uniform float uAlphaTest;
 varying vec2 vUv;
 varying vec4 vColor;
+#ifdef LIT
+varying vec3 vLight;
+#endif
 void main() {
   vec4 c = texture2D(uTex, vUv) * vColor;
   if (c.a < uAlphaTest) discard;
+#ifdef LIT
+  c.rgb *= vLight;
+#endif
   gl_FragColor = c;
 }
 `;
@@ -165,6 +189,7 @@ export class ParticleSystem {
 	constructor(
 		readonly emitter: M2ParticleEmitter,
 		texture: Texture,
+		lighting: M2Lighting,
 		readonly maxParticles = 512,
 	) {
 		// Head and tail are independent styles; an emitter asking for both draws two quads per particle.
@@ -196,10 +221,21 @@ export class ParticleSystem {
 		this.geometry.setDrawRange(0, 0);
 		this.attributes = ["position", "uv", "aColor"].map((n) => this.geometry.attributes[n] as BufferAttribute);
 
+		// The client builds a material for the emitter with the Unlit bit inverted, then takes the
+		// lighting away again from the two blend modes its `s_localLighting` table never shades.
+		const lit =
+			!(emitter.flags & M2ParticleFlags.Unlit) &&
+			emitter.blendMode !== M2BlendMode.Mod &&
+			emitter.blendMode !== M2BlendMode.Mod2x;
 		this.material = new ShaderMaterial({
 			vertexShader: VERTEX,
 			fragmentShader: FRAGMENT,
-			uniforms: { uTex: { value: texture }, uAlphaTest: { value: alphaTestFor(emitter.blendMode) } },
+			defines: lit ? { LIT: "", ...LIGHTING_DEFINES } : {},
+			uniforms: {
+				uTex: { value: texture },
+				uAlphaTest: { value: alphaTestFor(emitter.blendMode) },
+				...(lit ? lightingUniforms(lighting) : {}),
+			},
 			depthWrite: false,
 			side: DoubleSide,
 		});

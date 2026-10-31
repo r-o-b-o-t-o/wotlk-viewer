@@ -273,11 +273,20 @@ export class ParticleSystem {
 			i++;
 		}
 
-		// Spawn new ones.
+		// Spawn new ones. The variation is a count per second to add, not a fraction to scale by, so it
+		// can pull the rate below zero, and the client lets that drain the accumulator — throttling the
+		// emitter until it climbs back, which is what keeps its average rate the one the track asks for.
+		//
+		// The debt is held to a single particle. Without a floor it is a random walk, and the 23 emitters
+		// that pair a variation with a rate of zero wander far enough negative to go silent for good;
+		// the client reaches that state too and empties its free list in one frame instead. Capping the
+		// debt hands a little of it back, but only to emitters asking for nothing in the first place:
+		// at a rate of zero it leaks 2.5 particles a second at the largest variation in the client, and
+		// none at all at the common ones.
 		if (animator.sampleScalar(e.enabledIn, "u8", 1) !== 0) {
-			const rate = animator.sampleScalar(e.emissionRate, "float", 0) * (1 + e.emissionRateVary * rand2());
-			this.emitAccumulator += Math.max(rate, 0) * dt;
-			const n = Math.floor(this.emitAccumulator);
+			const rate = animator.sampleScalar(e.emissionRate, "float", 0) + e.emissionRateVary * rand2();
+			this.emitAccumulator = Math.max(this.emitAccumulator + rate * dt, -1);
+			const n = Math.max(0, Math.floor(this.emitAccumulator));
 			this.emitAccumulator -= n;
 			for (let i = 0; i < n && this.count < this.maxParticles; i++) this.spawn(animator);
 		}
@@ -287,7 +296,10 @@ export class ParticleSystem {
 
 	private spawn(animator: M2Animator): void {
 		const e = this.emitter;
-		const life = animator.sampleScalar(e.lifespan, "float", 1) * (1 + e.lifespanVary * rand2());
+		// Seconds to add, again, not a fraction: the client's own budget sums `life + lifeVariation`,
+		// which only means anything if both are times. 89 emitters can land on a life of zero or less,
+		// where the client clamps to a millisecond and the particle dies before it is ever drawn.
+		const life = animator.sampleScalar(e.lifespan, "float", 1) + e.lifespanVary * rand2();
 		if (life <= 0) return;
 		const speed =
 			animator.sampleScalar(e.emissionSpeed, "float", 0) *

@@ -80,6 +80,13 @@ const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
 /** Gravity for an emitter simulating in its own frame: that frame's -Z, which is what the client pulls along. */
 const LOCAL_DOWN = new Vector3(0, 0, -1);
+/**
+ * The quarter turn about Z the client slips between an emitter and its bone (`M2Model.cpp`): a
+ * particle is turned in the emitter's own coordinates and the emitter's offset added after, which
+ * is why it multiplies on the right of the two. Everything laid out in those coordinates rides it —
+ * where particles are born, which way they set off, and the plane an XyQuad sprite lies in.
+ */
+const EMITTER_ROTATION = /* @__PURE__ */ new Matrix4().makeRotationZ(Math.PI / 2);
 /** The plane an XyQuad emitter lays its head quads in, in the space its particles live in. */
 const tmpQuadX = new Vector3();
 const tmpQuadY = new Vector3();
@@ -306,7 +313,10 @@ export class ParticleSystem {
 		const e = this.emitter;
 		const p = this.particles;
 
-		this.emitterFrame.copy(bone).multiply(tmpMat.makeTranslation(e.position[0], e.position[1], e.position[2]));
+		this.emitterFrame
+			.copy(bone)
+			.multiply(tmpMat.makeTranslation(e.position[0], e.position[1], e.position[2]))
+			.multiply(EMITTER_ROTATION);
 
 		// A local-frame emitter simulates in its own frame and hands that frame to the mesh, so the
 		// particles ride the bone however it moves. Everything else is baked into the scene at birth,
@@ -470,9 +480,10 @@ export class ParticleSystem {
 			// Despite the name this is no spawn shape: the position above stands, only the travel turns.
 			if (this.upDirection) tmpDir.set(0, 0, 1);
 		} else {
-			// Plane: spawn in a rectangle, moving along +Z within the given cone. The length runs along the
-			// bone's X axis (weapon glows span the blade with it), the width along Y.
-			tmpPos.set(length * (Math.random() - 0.5), width * (Math.random() - 0.5), 0);
+			// Plane: spawn in a rectangle, moving along +Z within the given cone. Laid out as the client
+			// lays it out, width across X and length across Y, which the frame's quarter turn then puts
+			// the other way round — so the length still spans the bone's X, as a weapon glow does a blade.
+			tmpPos.set(width * (Math.random() - 0.5), length * (Math.random() - 0.5), 0);
 			tmpDir.set(Math.sin(polar) * Math.cos(azimuth), Math.sin(polar) * Math.sin(azimuth), Math.cos(polar));
 		}
 		// The emitter's origin rides in `toSim` (and in the mesh's matrix for a local-frame emitter),

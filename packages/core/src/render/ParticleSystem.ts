@@ -133,6 +133,12 @@ export class ParticleSystem {
 	private readonly squirt: boolean;
 	/** Whether the edge has already fired, so it takes a quiet frame to arm again. */
 	private burstFired = false;
+	/**
+	 * How many particles this emitter may hold at once. The client allocates a pool from the emitter's
+	 * own numbers whenever it is about to emit, grows it as those numbers rise and never shrinks it
+	 * again, and emits nothing more while it is full; `maxParticles` is only the ceiling over that.
+	 */
+	private capacity = 0;
 	/** The emitter's own frame: its bone, offset to the emitter's origin. */
 	private readonly emitterFrame = new Matrix4();
 	/** Emitter frame -> simulation space, applied to a particle once, at birth. */
@@ -281,6 +287,7 @@ export class ParticleSystem {
 		// Spawn new ones.
 		const visible = animator.sampleScalar(e.enabledIn, "u8", 1) !== 0;
 		const tracked = animator.sampleScalar(e.emissionRate, "float", 0);
+		const lifespan = animator.sampleScalar(e.lifespan, "float", 1);
 		if (this.squirt) {
 			// A squirt emitter never streams: the client leaves its "emitting" bit clear for good and
 			// instead fires a single burst of `rate` particles each time the rate track rises above zero
@@ -290,8 +297,9 @@ export class ParticleSystem {
 			// empties its free list in one frame.
 			const armed = visible && tracked > 0;
 			if (armed && !this.burstFired) {
+				this.grow(lifespan, tracked);
 				const burst = Math.max(0, Math.floor(tracked + e.emissionRateVary * rand2()));
-				for (let i = 0; i < burst && this.count < this.maxParticles; i++) this.spawn(animator);
+				for (let i = 0; i < burst && this.count < this.capacity; i++) this.spawn(animator, lifespan);
 			}
 			this.burstFired = armed;
 		} else if (visible) {
@@ -305,22 +313,49 @@ export class ParticleSystem {
 			// Capping the debt hands a little of it back, but only to emitters asking for nothing in the
 			// first place: at a rate of zero it leaks 2.5 particles a second at the largest variation in
 			// the client, and none at all at the common ones.
+			this.grow(lifespan, tracked);
 			const rate = tracked + e.emissionRateVary * rand2();
 			this.emitAccumulator = Math.max(this.emitAccumulator + rate * dt, -1);
 			const n = Math.max(0, Math.floor(this.emitAccumulator));
-			this.emitAccumulator -= n;
-			for (let i = 0; i < n && this.count < this.maxParticles; i++) this.spawn(animator);
+			// Only what a free slot was found for comes off the accumulator, as in the client: a full
+			// pool holds the rest back as credit rather than dropping it. Emitters whose pool is as
+			// tight as their steady state sit at that edge for a good part of the time.
+			let emitted = 0;
+			while (emitted < n && this.count < this.capacity) {
+				this.spawn(animator, lifespan);
+				emitted++;
+			}
+			this.emitAccumulator -= emitted;
 		}
 
 		this.buildQuads(basis);
 	}
 
-	private spawn(animator: M2Animator): void {
+	/**
+	 * Sizes the pool the way the client's `Sync` does, from the emitter's own life and rate as they
+	 * stand. It only ever grows, so an emitter keeps the room its busiest moment asked for.
+	 *
+	 * A streaming emitter asks for its steady state and 15% again, so it often sits right at the pool
+	 * without losing anything, the accumulator holding what it could not place. A `Squirt` one is
+	 * measured by that same continuous formula though it emits in lumps, so 368 of the 630 of them
+	 * cannot fit a whole burst, and the pool rather than the rate is what paces them.
+	 *
+	 * Rounding down means a rate and life whose product is under 1/1.15 ask for no pool at all and so
+	 * emit nothing, which is what the client does with them too. It reaches 17 emitters, 4 of them on
+	 * items, and each is sparse enough to be invisible anyway — the paladin shoulders want one
+	 * particle every five seconds.
+	 */
+	private grow(lifespan: number, rate: number): void {
+		const want = Math.floor((lifespan + this.emitter.lifespanVary) * (rate + this.emitter.emissionRateVary) * 1.15);
+		if (want > this.capacity) this.capacity = Math.min(want, this.maxParticles);
+	}
+
+	private spawn(animator: M2Animator, lifespan: number): void {
 		const e = this.emitter;
 		// Seconds to add, again, not a fraction: the client's own budget sums `life + lifeVariation`,
 		// which only means anything if both are times. 89 emitters can land on a life of zero or less,
 		// where the client clamps to a millisecond and the particle dies before it is ever drawn.
-		const life = animator.sampleScalar(e.lifespan, "float", 1) + e.lifespanVary * rand2();
+		const life = lifespan + e.lifespanVary * rand2();
 		if (life <= 0) return;
 		const speed =
 			animator.sampleScalar(e.emissionSpeed, "float", 0) *

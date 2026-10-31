@@ -193,15 +193,13 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   client and leave them behind here. The particle mesh of such an emitter also sorts against other translucent
   objects from the scene origin rather than from the model, since its own transform becomes the identity; that only
   matters for the few emitters using the Alpha blend mode, additive ones being order-independent.
-- An emitter is capped at a flat 512 particles, where the client sizes each one's pool from its own numbers —
-  `(life + lifeVariation) * (rate + rateVariation) * 1.15`, grown as those change and never shrunk — and stops
-  emitting when that pool runs dry. For a streaming emitter the two agree, the budget being its steady state with
-  headroom, and only 171 emitters in the client want more than 512. For a `Squirt` emitter they do not: the budget
-  is computed from a continuous rate the emitter never uses, so 368 of the 630 of them have a pool smaller than a
-  single burst, sometimes much smaller (`SpellSteal_Missile` asks for 90 into a pool of 20). Those emitters burst
-  at full size here and are clipped in the client, and where a burst arrives before the last one has died — the
-  Stratholme bow fires every 166ms with particles living 0.7s — the client's pool is what throttles it, not the
-  rate. Worth deciding on if bursts look too dense.
+- An emitter's pool is sized like the client's, `(life + lifeVariation) * (rate + rateVariation) * 1.15`, grown as
+  those numbers rise and never shrunk, with emission stopping while it is full. Rounding that down to whole
+  particles, as the client does, silences an emitter whose rate and life multiply to less than 1/1.15: it reaches 17
+  emitters, 4 of them on items, each wanting roughly one particle every few seconds — three of the seven on
+  `Shoulder_Plate_RaidPaladin_C_01`, which keeps the rest. On top sits a ceiling of `maxParticles`, 512 by default,
+  which the client has no equivalent of; 171 emitters ask for more than that and would be thinned here, none of
+  them on an item or character model.
 - `ParticleColor.dbc` recolouring follows the `ParticleColorID` on `ItemDisplayInfo` and `CreatureDisplayInfo`. An
   emitter also has to ask for a colour set with a `particleColorIndex` of 11, 12 or 13, which narrows it to 38 items
   (all shoulders) and 381 creature displays.

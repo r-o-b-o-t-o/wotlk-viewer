@@ -307,8 +307,13 @@ export const M2ParticleFlags = {
 	/** Billboard aligns along the velocity vector. */
 	VelocityOrient: 0x4,
 	Unfogged: 0x8,
-	/** Simulated in world space, skipping the bone transform. */
-	WorldSpace: 0x10,
+	/**
+	 * Simulated in the emitter's own frame, so the particles ride its bone and gravity pulls along
+	 * that bone's -Z. Without it they are shed into the model's frame of reference at birth and left
+	 * there. The client holds this as its own `0x200` and applies the emitter transform at draw time;
+	 * the name is not "world space", which is what the flag being *clear* comes closest to.
+	 */
+	LocalFrame: 0x10,
 	InheritBoneScale: 0x20,
 	InheritVelocity: 0x40,
 	/** Kills particles moving away from the centre. */

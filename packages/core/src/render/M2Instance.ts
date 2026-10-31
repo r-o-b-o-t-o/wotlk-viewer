@@ -4,7 +4,7 @@ import { M2Animator, type BillboardBasis } from "../animation/M2Animator.js";
 import { M2Combiner, M2TextureType, type M2Attachment } from "../formats/m2.js";
 import { M2Material, TexCoordSource, type M2Lighting } from "./M2Material.js";
 import type { M2Model } from "./M2Model.js";
-import { ParticleSystem } from "./ParticleSystem.js";
+import { ParticleSystem, type EmitterFrames } from "./ParticleSystem.js";
 
 export interface PlayOptions {
 	loop?: boolean;
@@ -20,7 +20,12 @@ interface AttachedChild {
 const IDENTITY_BIND = new Matrix4();
 const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
-const tmpWorldUp = new Vector3();
+const tmpSceneBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
+/**
+ * Down in the scene, which gravity follows for particles shed out of their emitter's frame.
+ * `Viewer.root` turns WoW's Z-up into the scene's Y-up, so the scene's -Y is that direction.
+ */
+const SCENE_DOWN = new Vector3(0, -1, 0);
 /** An emitter takes a ParticleColor.dbc set when its index is this, one past it, or two past it. */
 const PARTICLE_COLOR_FIRST_INDEX = 11;
 // Right-handed like a camera basis (right x up = back), so quads are not mirrored without a camera.
@@ -29,6 +34,16 @@ const DEFAULT_BASIS: BillboardBasis = {
 	up: new Vector3(0, 0, 1),
 	back: new Vector3(1, 0, 0),
 };
+/** Rebuilt once per instance per frame; every emitter of that instance reads it within `update`. */
+const tmpFrames: EmitterFrames = {
+	local: DEFAULT_BASIS,
+	scene: DEFAULT_BASIS,
+	world: new Matrix4(),
+	worldInverse: new Matrix4(),
+	worldScale: 1,
+	sceneDown: SCENE_DOWN,
+};
+const tmpVec = new Vector3();
 
 /**
  * A renderable, animated instance of an M2Model. Add it to a three.js scene (it uses WoW's Z-up
@@ -249,13 +264,23 @@ export class M2Instance extends Object3D {
 
 		const boneMatrices = this.animator.boneMatrices;
 		if (this.particles.length > 0) {
-			// World up in this instance's own space, for emitters that aim along it instead of their bone.
-			// `Viewer.root` turns WoW's Z-up into the scene's Y-up, so the scene's +Y is that direction.
-			tmpWorldUp.set(0, 1, 0).transformDirection(tmpMat.copy(this.matrixWorld).invert());
-		}
-		for (const ps of this.particles) {
-			const bone = boneMatrices[ps.emitter.bone] ?? IDENTITY_BIND;
-			ps.update(dtMs / 1000, this.animator, bone, basis ?? DEFAULT_BASIS, tmpWorldUp);
+			tmpFrames.local = basis ?? DEFAULT_BASIS;
+			if (camera) {
+				const c = camera.matrixWorld.elements;
+				tmpSceneBasis.right.set(c[0], c[1], c[2]).normalize();
+				tmpSceneBasis.up.set(c[4], c[5], c[6]).normalize();
+				tmpSceneBasis.back.set(c[8], c[9], c[10]).normalize();
+			}
+			tmpFrames.scene = camera ? tmpSceneBasis : DEFAULT_BASIS;
+			tmpFrames.world.copy(this.matrixWorld);
+			tmpFrames.worldInverse.copy(this.matrixWorld).invert();
+			// A creature display or a pet scales the whole instance, which particles drawn in the scene
+			// are outside of; the emitter's own frame carries it for the others.
+			tmpFrames.worldScale = tmpVec.setFromMatrixColumn(this.matrixWorld, 0).length();
+			for (const ps of this.particles) {
+				const bone = boneMatrices[ps.emitter.bone] ?? IDENTITY_BIND;
+				ps.update(dtMs / 1000, this.animator, bone, tmpFrames);
+			}
 		}
 
 		for (const { instance, attachment } of this.attached) {

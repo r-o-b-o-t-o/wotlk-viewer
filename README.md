@@ -187,6 +187,12 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - Particle emitters use a simplified CPU simulation: head and tail quads with spin, but no tumble, wind or spline
   emitters. Ribbon emitters are not rendered. The head/tail choice comes from the `HeadStyle` and `TailStyle` flags,
   not the `HeadOrTail` byte, which is 0 on every 3.3.5a emitter.
+- An emitter without `LocalFrame` sheds its particles into the scene at birth, where the client sheds them into the
+  model's frame of reference — the unit's own matrix when it has one, the world otherwise. The two coincide for a
+  character standing still, which is all the demo shows, but a moving model would drag such particles along in the
+  client and leave them behind here. The particle mesh of such an emitter also sorts against other translucent
+  objects from the scene origin rather than from the model, since its own transform becomes the identity; that only
+  matters for the few emitters using the Alpha blend mode, additive ones being order-independent.
 - `ParticleColor.dbc` recolouring follows the `ParticleColorID` on `ItemDisplayInfo` and `CreatureDisplayInfo`. An
   emitter also has to ask for a colour set with a `particleColorIndex` of 11, 12 or 13, which narrows it to 38 items
   (all shoulders) and 381 creature displays.

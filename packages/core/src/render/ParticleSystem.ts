@@ -49,6 +49,30 @@ const tmpPos = new Vector3();
 const tmpDir = new Vector3();
 const tmpAcross = new Vector3();
 const tmpAlong = new Vector3();
+const tmpMat = new Matrix4();
+/** Camera axes re-expressed in a local-frame emitter's own space; rebuilt per emitter per frame. */
+const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
+/** Gravity for an emitter simulating in its own frame: that frame's -Z, which is what the client pulls along. */
+const LOCAL_DOWN = new Vector3(0, 0, -1);
+
+/**
+ * The frames an instance offers its emitters each frame. Which one an emitter picks is its own
+ * choice, from `M2ParticleFlags.LocalFrame`.
+ */
+export interface EmitterFrames {
+	/** Camera axes in the instance's own space. */
+	local: BillboardBasis;
+	/** Camera axes in the scene's space. */
+	scene: BillboardBasis;
+	/** The instance's world matrix. */
+	world: Matrix4;
+	/** Its inverse, which brings the scene back into the instance. */
+	worldInverse: Matrix4;
+	/** The instance's uniform world scale, which turns its own units into the scene's. */
+	worldScale: number;
+	/** Down in the scene, which gravity follows for particles shed into it. */
+	sceneDown: Vector3;
+}
 
 /** Samples a life-fraction keyed track, falling back to a constant when it has no keys. */
 function samplePart(track: M2PartTrack, t: number, out: Float32Array, fallback: number): void {
@@ -60,8 +84,15 @@ function samplePart(track: M2PartTrack, t: number, out: Float32Array, fallback: 
 }
 
 /**
- * CPU-simulated M2 particle emitter rendered as camera-facing quads in model space.
- * Simplified: no tails, tumble, wind or ParticleColor.dbc overrides.
+ * CPU-simulated M2 particle emitter rendered as camera-facing quads.
+ *
+ * Particles are simulated in one of two frames, as the client does. A `LocalFrame` emitter keeps
+ * them in the emitter's own frame and lets the mesh carry that frame, so they ride the bone and
+ * gravity pulls along the bone's -Z; every other emitter sheds them into the scene at birth and
+ * leaves them there, falling along scene down.
+ *
+ * Simplified: no tumble, wind, twinkle, zSource or spline emitters, and see "Known limitations" in
+ * the README for the rest.
  */
 export class ParticleSystem {
 	readonly mesh: Mesh;
@@ -81,6 +112,17 @@ export class ParticleSystem {
 	private readonly head: boolean;
 	private readonly tail: boolean;
 	private readonly quadsPer: number;
+	/** Simulate in the emitter's own frame rather than shedding into the scene. */
+	private readonly localFrame: boolean;
+	/** The emitter's own frame: its bone, offset to the emitter's origin. */
+	private readonly emitterFrame = new Matrix4();
+	/** Emitter frame -> simulation space, applied to a particle once, at birth. */
+	private readonly toSim = new Matrix4();
+	/**
+	 * Model units -> simulation space, for the sprite sizes. The scale track is in model units, which
+	 * the mesh's own matrix carries for a local-frame emitter but not for one drawn in the scene.
+	 */
+	private sizeScale = 1;
 
 	constructor(
 		readonly emitter: M2ParticleEmitter,
@@ -92,6 +134,7 @@ export class ParticleSystem {
 		this.tail = (emitter.flags & M2ParticleFlags.TailStyle) !== 0;
 		this.head = !this.tail || (emitter.flags & M2ParticleFlags.HeadStyle) !== 0;
 		this.quadsPer = (this.head ? 1 : 0) + (this.tail ? 1 : 0);
+		this.localFrame = (emitter.flags & M2ParticleFlags.LocalFrame) !== 0;
 		const quads = maxParticles * this.quadsPer;
 		this.particles = new Float32Array(maxParticles * STRIDE);
 		this.positions = new Float32Array(quads * 4 * 3);
@@ -122,6 +165,8 @@ export class ParticleSystem {
 
 		this.mesh = new Mesh(this.geometry, this.material);
 		this.mesh.frustumCulled = false;
+		// `update` writes the matrix that carries the simulation space, so three.js must not rebuild it.
+		this.mesh.matrixAutoUpdate = false;
 		this.color = emitter.color;
 	}
 
@@ -144,20 +189,40 @@ export class ParticleSystem {
 	}
 
 	/**
-	 * Simulates `dt` seconds and rebuilds the quads. `bone` is the emitter bone's model-space matrix,
-	 * `up` the world up axis in that same space, which gravity follows for world-space emitters.
+	 * Simulates `dt` seconds and rebuilds the quads. `bone` is the emitter bone's model-space matrix;
+	 * `frames` carries the instance's own frame and the scene's, one of which this emitter simulates in.
 	 */
-	update(dt: number, animator: M2Animator, bone: Matrix4, basis: BillboardBasis, up: Vector3): void {
+	update(dt: number, animator: M2Animator, bone: Matrix4, frames: EmitterFrames): void {
 		const e = this.emitter;
 		const p = this.particles;
 
-		// A world-space emitter's particles fall along world down; an attached weapon is rotated, so its
-		// own -Z is not down. Model-space ones keep falling along the model's -Z.
+		this.emitterFrame.copy(bone).multiply(tmpMat.makeTranslation(e.position[0], e.position[1], e.position[2]));
+
+		// A local-frame emitter simulates in its own frame and hands that frame to the mesh, so the
+		// particles ride the bone however it moves. Everything else is baked into the scene at birth,
+		// which is where the client's frame of reference leaves it for a character standing still.
+		let basis: BillboardBasis;
+		let down: Vector3;
+		if (this.localFrame) {
+			this.toSim.identity();
+			this.mesh.matrix.copy(this.emitterFrame);
+			basis = basisIn(this.emitterFrame, frames.local);
+			down = LOCAL_DOWN;
+			this.sizeScale = 1;
+		} else {
+			this.toSim.multiplyMatrices(frames.world, this.emitterFrame);
+			this.mesh.matrix.copy(frames.worldInverse);
+			basis = frames.scene;
+			down = frames.sceneDown;
+			this.sizeScale = frames.worldScale;
+		}
+		// The mesh's matrix is set after the viewer walked the graph, so ask for one more composition.
+		this.mesh.matrixWorldNeedsUpdate = true;
+
 		const g = animator.sampleScalar(e.gravity, "float", 0) * dt;
-		const world = (e.flags & M2ParticleFlags.WorldSpace) !== 0;
-		const gx = world ? -up.x * g : 0;
-		const gy = world ? -up.y * g : 0;
-		const gz = world ? -up.z * g : -g;
+		const gx = down.x * g;
+		const gy = down.y * g;
+		const gz = down.z * g;
 		const drag = Math.max(0, 1 - e.drag * dt);
 		for (let i = 0; i < this.count;) {
 			const o = i * STRIDE;
@@ -182,13 +247,13 @@ export class ParticleSystem {
 			this.emitAccumulator += Math.max(rate, 0) * dt;
 			const n = Math.floor(this.emitAccumulator);
 			this.emitAccumulator -= n;
-			for (let i = 0; i < n && this.count < this.maxParticles; i++) this.spawn(animator, bone);
+			for (let i = 0; i < n && this.count < this.maxParticles; i++) this.spawn(animator);
 		}
 
 		this.buildQuads(basis);
 	}
 
-	private spawn(animator: M2Animator, bone: Matrix4): void {
+	private spawn(animator: M2Animator): void {
 		const e = this.emitter;
 		const life = animator.sampleScalar(e.lifespan, "float", 1) * (1 + e.lifespanVary * rand2());
 		if (life <= 0) return;
@@ -212,11 +277,10 @@ export class ParticleSystem {
 			tmpPos.set(length * (Math.random() - 0.5), width * (Math.random() - 0.5), 0);
 			tmpDir.set(Math.sin(polar) * Math.cos(azimuth), Math.sin(polar) * Math.sin(azimuth), Math.cos(polar));
 		}
-		tmpPos.x += e.position[0];
-		tmpPos.y += e.position[1];
-		tmpPos.z += e.position[2];
-		tmpPos.applyMatrix4(bone);
-		tmpDir.transformDirection(bone).multiplyScalar(speed);
+		// The emitter's origin rides in `toSim` (and in the mesh's matrix for a local-frame emitter),
+		// so it is never added here.
+		tmpPos.applyMatrix4(this.toSim);
+		tmpDir.transformDirection(this.toSim).multiplyScalar(speed);
 
 		const o = this.count++ * STRIDE;
 		const p = this.particles;
@@ -261,8 +325,8 @@ export class ParticleSystem {
 			samplePart(e.scale, t, tmpV, 1);
 			// Scale is the quad's half-extent, so the sprite spans twice it. The track always carries
 			// both components, so a zero height is intentional.
-			const sx = tmpV[0] * p[o + 9];
-			const sy = tmpV[1] * p[o + 9];
+			const sx = tmpV[0] * p[o + 9] * this.sizeScale;
+			const sy = tmpV[1] * p[o + 9] * this.sizeScale;
 			let cell = p[o + 8];
 			if (cell < 0) {
 				samplePart(e.headCell, t, tmpV, 0);
@@ -350,4 +414,13 @@ export class ParticleSystem {
 
 function rand2(): number {
 	return Math.random() * 2 - 1;
+}
+
+/** Re-expresses the camera axes of `basis` in the space `frame` maps out of. */
+function basisIn(frame: Matrix4, basis: BillboardBasis): BillboardBasis {
+	tmpMat.copy(frame).invert();
+	tmpBasis.right.copy(basis.right).transformDirection(tmpMat);
+	tmpBasis.up.copy(basis.up).transformDirection(tmpMat);
+	tmpBasis.back.copy(basis.back).transformDirection(tmpMat);
+	return tmpBasis;
 }

@@ -25,7 +25,7 @@ export {
 	type M2PointLight,
 } from "./render/M2Material.js";
 export { M2Instance, type PlayOptions } from "./render/M2Instance.js";
-export { ParticleSystem } from "./render/ParticleSystem.js";
+export { ParticleSystem, type EmitterFrames } from "./render/ParticleSystem.js";
 export { Viewer, type BackdropLighting, type ViewerOptions } from "./render/Viewer.js";
 export { blpToTexture, canvasToTexture, createWhiteTexture, type TextureOptions } from "./render/textures.js";
 export * from "./character/constants.js";

@@ -171,7 +171,7 @@ uniform int uCombiner;
 uniform float uAlphaTest;
 uniform bool uOpaque;
 uniform bool uUnlit;
-uniform bool uUnfogged;
+uniform int uFogMode;
 uniform vec4 uFog;
 ${LIGHTING_GLSL}
 varying vec2 vUv0;
@@ -204,10 +204,22 @@ void main() {
   }
   if (a < uAlphaTest) discard;
   if (!uUnlit) rgb *= m2Light(normalize(gl_FrontFacing ? vNormal : -vNormal), vViewPos);
-  if (!uUnfogged && uFog.w > 0.0) rgb = mix(rgb, uFog.xyz, clamp(-vViewPos.z / uFog.w, 0.0, 1.0));
+  if (uFogMode > 0 && uFog.w > 0.0) {
+    // Each mode fogs towards the colour its own blend treats as nothing, so a distant batch fades
+    // out of the picture rather than washing towards the sky: black adds nothing, white modulates
+    // nothing, and half grey is the one Mod2x doubles back to 1.
+    vec3 fogColor = uFogMode == 1 ? uFog.xyz : uFogMode == 2 ? vec3(0.0) : uFogMode == 3 ? vec3(1.0) : vec3(128.0 / 255.0);
+    rgb = mix(rgb, fogColor, clamp(-vViewPos.z / uFog.w, 0.0, 1.0));
+  }
   gl_FragColor = vec4(rgb, a);
 }
 `;
+
+/**
+ * `s_fogModes`, one entry per blend mode: which colour a batch fogs towards. 1 is the scene's own,
+ * and the rest are the colours their blend ops do nothing with.
+ */
+const FOG_MODES = [1, 1, 1, 2, 2, 3, 4];
 
 /**
  * The alpha ref the client picks per blend mode in `SetupMaterial`, compared the same way round
@@ -282,9 +294,7 @@ export class M2Material extends ShaderMaterial {
 						blendMode === M2BlendMode.Mod ||
 						blendMode === M2BlendMode.Mod2x,
 				},
-				// Fog washes an additive or modulated batch out instead of dimming it, so only the
-				// modes that paint over what is behind them take any.
-				uUnfogged: { value: (flags & M2MaterialFlags.Unfogged) !== 0 || blendMode > M2BlendMode.Alpha },
+				uFogMode: { value: flags & M2MaterialFlags.Unfogged ? 0 : (FOG_MODES[blendMode] ?? 1) },
 				uFog: { value: lighting.fog },
 			},
 		});

@@ -267,6 +267,10 @@ export class ParticleSystem {
 			!(emitter.flags & M2ParticleFlags.Unlit) &&
 			emitter.blendMode !== M2BlendMode.Mod &&
 			emitter.blendMode !== M2BlendMode.Mod2x;
+		// The client keeps depth write on for blend 0 and 1 alone, and queues those emitters in its
+		// opaque pass rather than among the translucent elements. `applyM2BlendMode` already splits
+		// `transparent` at the same mode, so that half needs no code here.
+		const opaquePass = emitter.blendMode <= M2BlendMode.AlphaKey;
 		this.material = new ShaderMaterial({
 			vertexShader: VERTEX,
 			fragmentShader: FRAGMENT,
@@ -276,11 +280,10 @@ export class ParticleSystem {
 				uAlphaTest: { value: alphaTestFor(emitter.blendMode) },
 				...(lit ? lightingUniforms(lighting) : {}),
 			},
-			depthWrite: false,
+			depthWrite: opaquePass,
 			side: DoubleSide,
 		});
 		applyM2BlendMode(this.material, emitter.blendMode);
-		this.material.transparent = true; // always drawn after opaque geometry
 
 		this.mesh = new Mesh(this.geometry, this.material);
 		this.mesh.frustumCulled = false;

@@ -14,6 +14,9 @@ import { M2BlendMode, M2ParticleFlags, type M2ParticleEmitter, type M2PartTrack 
 import { sampleTrack } from "../animation/tracks.js";
 import {
 	alphaTestFor,
+	fogModeFor,
+	fogUniforms,
+	FOG_GLSL,
 	applyM2BlendMode,
 	LIGHTING_DEFINES,
 	LIGHTING_GLSL,
@@ -29,6 +32,7 @@ varying vec4 vColor;
 ${LIGHTING_GLSL}
 varying vec3 vLight;
 #endif
+varying float vViewZ;
 void main() {
   vUv = uv;
   vColor = aColor;
@@ -39,6 +43,7 @@ void main() {
   // too, so the point lights still vary over the quad.
   vLight = m2Light(normalize(mat3(viewMatrix)[1]), viewPos.xyz);
 #endif
+  vViewZ = viewPos.z;
   gl_Position = projectionMatrix * viewPos;
 }
 `;
@@ -46,8 +51,10 @@ void main() {
 const FRAGMENT = /* glsl */ `
 uniform sampler2D uTex;
 uniform float uAlphaTest;
+${FOG_GLSL}
 varying vec2 vUv;
 varying vec4 vColor;
+varying float vViewZ;
 #ifdef LIT
 varying vec3 vLight;
 #endif
@@ -57,6 +64,7 @@ void main() {
 #ifdef LIT
   c.rgb *= vLight;
 #endif
+  c.rgb = m2Fog(c.rgb, vViewZ);
   gl_FragColor = c;
 }
 `;
@@ -286,6 +294,12 @@ export class ParticleSystem {
 			uniforms: {
 				uTex: { value: texture },
 				uAlphaTest: { value: alphaTestFor(emitter.blendMode) },
+				// The client runs `SetupLighting` for a particle element too, so an emitter takes its fog
+				// from the same table a geometry batch does, and its own `Unfogged` flag turns it off.
+				...fogUniforms(
+					lighting,
+					fogModeFor(emitter.blendMode, (emitter.flags & M2ParticleFlags.Unfogged) !== 0),
+				),
 				...(lit ? lightingUniforms(lighting) : {}),
 			},
 			depthWrite: opaquePass,

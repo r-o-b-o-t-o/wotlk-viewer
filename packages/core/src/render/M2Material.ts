@@ -127,6 +127,40 @@ export function lightingUniforms(lighting: M2Lighting): Record<string, { value: 
 	};
 }
 
+/**
+ * `s_fogModes`, one entry per blend mode: which colour a batch fogs towards. 1 is the scene's own,
+ * and the rest are the colours their blend ops do nothing with.
+ */
+const FOG_MODES = [1, 1, 1, 2, 2, 3, 4];
+
+/** The entry a batch or emitter takes from `s_fogModes`; zero where it asked not to be fogged. */
+export function fogModeFor(blendMode: number, unfogged: boolean): number {
+	return unfogged ? 0 : (FOG_MODES[blendMode] ?? 1);
+}
+
+/**
+ * The fog a shader mixes towards, as `m2Fog(rgb, viewZ)`. Shared with the particle shader, which the
+ * client fogs from the same table.
+ */
+export const FOG_GLSL = /* glsl */ `
+uniform int uFogMode;
+uniform vec4 uFog;
+
+vec3 m2Fog(vec3 rgb, float viewZ) {
+  if (uFogMode == 0 || uFog.w <= 0.0) return rgb;
+  // Each mode fogs towards the colour its own blend treats as nothing, so a distant batch fades out
+  // of the picture rather than washing towards the sky: black adds nothing, white modulates nothing,
+  // and half grey is the one Mod2x doubles back to 1.
+  vec3 fogColor = uFogMode == 1 ? uFog.xyz : uFogMode == 2 ? vec3(0.0) : uFogMode == 3 ? vec3(1.0) : vec3(128.0 / 255.0);
+  return mix(rgb, fogColor, clamp(-viewZ / uFog.w, 0.0, 1.0));
+}
+`;
+
+/** The uniforms `FOG_GLSL` reads: the scene's own fog vector, and which entry this draw takes. */
+export function fogUniforms(lighting: M2Lighting, mode: number): Record<string, { value: Vector4 | number }> {
+	return { uFog: { value: lighting.fog }, uFogMode: { value: mode } };
+}
+
 const VERTEX = /* glsl */ `
 #include <common>
 #include <skinning_pars_vertex>
@@ -171,9 +205,8 @@ uniform int uCombiner;
 uniform float uAlphaTest;
 uniform bool uOpaque;
 uniform bool uUnlit;
-uniform int uFogMode;
-uniform vec4 uFog;
 ${LIGHTING_GLSL}
+${FOG_GLSL}
 varying vec2 vUv0;
 varying vec2 vUv1;
 varying vec3 vNormal;
@@ -204,22 +237,10 @@ void main() {
   }
   if (a < uAlphaTest) discard;
   if (!uUnlit) rgb *= m2Light(normalize(gl_FrontFacing ? vNormal : -vNormal), vViewPos);
-  if (uFogMode > 0 && uFog.w > 0.0) {
-    // Each mode fogs towards the colour its own blend treats as nothing, so a distant batch fades
-    // out of the picture rather than washing towards the sky: black adds nothing, white modulates
-    // nothing, and half grey is the one Mod2x doubles back to 1.
-    vec3 fogColor = uFogMode == 1 ? uFog.xyz : uFogMode == 2 ? vec3(0.0) : uFogMode == 3 ? vec3(1.0) : vec3(128.0 / 255.0);
-    rgb = mix(rgb, fogColor, clamp(-vViewPos.z / uFog.w, 0.0, 1.0));
-  }
+  rgb = m2Fog(rgb, vViewPos.z);
   gl_FragColor = vec4(rgb, a);
 }
 `;
-
-/**
- * `s_fogModes`, one entry per blend mode: which colour a batch fogs towards. 1 is the scene's own,
- * and the rest are the colours their blend ops do nothing with.
- */
-const FOG_MODES = [1, 1, 1, 2, 2, 3, 4];
 
 /**
  * The alpha ref the client picks per blend mode in `SetupMaterial`, compared the same way round
@@ -294,8 +315,7 @@ export class M2Material extends ShaderMaterial {
 						blendMode === M2BlendMode.Mod ||
 						blendMode === M2BlendMode.Mod2x,
 				},
-				uFogMode: { value: flags & M2MaterialFlags.Unfogged ? 0 : (FOG_MODES[blendMode] ?? 1) },
-				uFog: { value: lighting.fog },
+				...fogUniforms(lighting, fogModeFor(blendMode, (flags & M2MaterialFlags.Unfogged) !== 0)),
 			},
 		});
 		this.blendMode = blendMode;

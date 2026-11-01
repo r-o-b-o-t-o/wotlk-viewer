@@ -226,6 +226,11 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   Transcendence priest helm — and was triaged as not worth the code. The client reads it ahead of
   `HemisphereUpDirection`, so the 76 sphere emitters carrying both take the up direction here where the client
   aims them away from the source instead; none of those is on an item.
+- A model-wide alpha is not modelled, so nothing here fades. The client scales both a geometry batch's alpha and
+  every particle's alpha track by the model's own fade (`m_alpha` and `m_alphaScale`, each built from
+  `m_fadeAlpha`), and stops drawing either once the product falls under 1e-4. That fade is gameplay state —
+  stealth, a dying unit, a missile fading in with distance, a glue frame fading up — and never comes out of the M2
+  file, so the factor would be a constant 1 here. Only a caller that wants to fade a model needs it.
 - Bezier tracks are treated as hermite.
 - Sequence switching is instant (no `blendTime` cross-fade) and Stand variations are not randomized (always variation 0
   unless you pass one).

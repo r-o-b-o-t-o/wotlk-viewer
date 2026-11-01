@@ -80,6 +80,8 @@ const tmpMat = new Matrix4();
 const tmpBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(), back: new Vector3() };
 /** Gravity for an emitter simulating in its own frame: that frame's -Z, which is what the client pulls along. */
 const LOCAL_DOWN = new Vector3(0, 0, -1);
+/** The squared length the client calls zero when aiming a quad, both for a velocity and its shadow. */
+const MIN_LENGTH_SQ = 2.384185791015625e-7;
 /** The longest the client lets an emitter step at once (`s_maxTimeStep`), in seconds. */
 const MAX_STEP = 0.1;
 /**
@@ -181,6 +183,8 @@ export class ParticleSystem {
 	private readonly implode: boolean;
 	/** Lay the head quad flat in the frame its particles were born in, not facing the camera. */
 	private readonly xyQuad: boolean;
+	/** Turn the head quad to lie along the particle's own travel instead of spinning it. */
+	private readonly velocityOrient: boolean;
 	/** Write the quads back to front rather than in array order. */
 	private readonly sorted: boolean;
 	/** Particle indices, farthest first; refilled every frame a sorted emitter draws. */
@@ -237,6 +241,7 @@ export class ParticleSystem {
 		this.upDirection = sphere && (emitter.flags & M2ParticleFlags.HemisphereUpDirection) !== 0;
 		this.implode = sphere && (emitter.flags & M2ParticleFlags.ImplosionFilter) !== 0;
 		this.xyQuad = (emitter.flags & M2ParticleFlags.XyQuad) !== 0;
+		this.velocityOrient = (emitter.flags & M2ParticleFlags.VelocityOrient) !== 0;
 		this.sorted = (emitter.flags & M2ParticleFlags.SortParticles) !== 0;
 		this.sortDepth = new Float32Array(this.sorted ? maxParticles : 0);
 		this.twinkleBase = emitter.twinkleScale[0];
@@ -618,14 +623,34 @@ export class ParticleSystem {
 				z = p[o + 2];
 
 			if (this.head) {
-				// The quad spins in its own plane, so the corner is rotated before the basis maps it out.
-				const angle = p[o + 10] + p[o + 11] * age;
-				const cos = Math.cos(angle),
-					sin = Math.sin(angle);
-				tmpAcross.copy(headRight).multiplyScalar(cos * sx);
-				tmpAcross.addScaledVector(headUp, sin * sx);
-				tmpAlong.copy(headUp).multiplyScalar(cos * sy);
-				tmpAlong.addScaledVector(headRight, -sin * sy);
+				const speedSq = p[o + 3] * p[o + 3] + p[o + 4] * p[o + 4] + p[o + 5] * p[o + 5];
+				if (this.velocityOrient && speedSq > MIN_LENGTH_SQ) {
+					// The quad lies back along the way the particle came, flattened into the view plane, and
+					// gives up as much width as the flattening took from it: one travelling at the camera thins
+					// away rather than turning to face it. The client lays it out in the view plane whatever
+					// `XyQuad` asked for, which 23 emitters ask for alongside this, and leaves the spin unread,
+					// which 107 of them carry.
+					const flatX = -(p[o + 3] * basis.right.x + p[o + 4] * basis.right.y + p[o + 5] * basis.right.z);
+					const flatY = -(p[o + 3] * basis.up.x + p[o + 4] * basis.up.y + p[o + 5] * basis.up.z);
+					const flatSq = flatX * flatX + flatY * flatY;
+					const inv = flatSq > MIN_LENGTH_SQ ? 1 / Math.sqrt(flatSq) : 0;
+					const axisX = flatX * inv,
+						axisY = flatY * inv;
+					const width = inv > 0 ? sx * Math.sqrt(flatSq / speedSq) : sx;
+					tmpAcross.copy(basis.right).multiplyScalar(axisX * width);
+					tmpAcross.addScaledVector(basis.up, axisY * width);
+					tmpAlong.copy(basis.right).multiplyScalar(-axisY * sy);
+					tmpAlong.addScaledVector(basis.up, axisX * sy);
+				} else {
+					// The quad spins in its own plane, so the corner is rotated before the basis maps it out.
+					const angle = p[o + 10] + p[o + 11] * age;
+					const cos = Math.cos(angle),
+						sin = Math.sin(angle);
+					tmpAcross.copy(headRight).multiplyScalar(cos * sx);
+					tmpAcross.addScaledVector(headUp, sin * sx);
+					tmpAlong.copy(headUp).multiplyScalar(cos * sy);
+					tmpAlong.addScaledVector(headRight, -sin * sy);
+				}
 				// The particle's random cell stands in only where the head has no track of its own.
 				this.writeQuad(quad++, x, y, z, cellAt(e.headCell, t, p[o + 8]), cols, rows, r, g, b, a);
 			}

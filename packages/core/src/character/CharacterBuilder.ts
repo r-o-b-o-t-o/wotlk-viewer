@@ -16,6 +16,7 @@ import {
 	GeosetGroup,
 	InventoryType,
 	ITEM_TEXTURE_SLOTS,
+	ITEM_VISUAL_ATTACHMENTS,
 } from "./constants.js";
 import type { GameData, ItemDisplayInfo } from "./GameData.js";
 import { TextureCompositor } from "./TextureCompositor.js";
@@ -33,6 +34,8 @@ export interface CharacterItem {
 	transmogEntry?: number;
 	/** Needed to tell robes, shields, etc. apart when only `displayId` is given. */
 	inventoryType?: InventoryType;
+	/** SpellItemEnchantment id of the permanent enchant, whose effect hangs off the item model. */
+	enchant?: number;
 }
 
 /** Guild crest, as stored in the emblem columns of AzerothCore's `guild` table. */
@@ -60,6 +63,8 @@ export interface CharacterAppearance {
 	showHelm?: boolean;
 	showCloak?: boolean;
 	showTabard?: boolean;
+	/** Show the particle effects of the items' permanent enchants (default true). */
+	showEnchants?: boolean;
 	/** Carry main/off-hand weapons on the back or hips instead of in the hands. */
 	sheathed?: boolean;
 	/**
@@ -75,6 +80,8 @@ interface ResolvedItem {
 	inventoryType: InventoryType;
 	/** Item.dbc SheatheType (0 = none). */
 	sheatheType: number;
+	/** SpellItemEnchantment id of the permanent enchant (0 = none). */
+	enchant: number;
 }
 
 /** Body regions (ITEM_TEXTURE_SLOTS indices) an item slot is allowed to paint; robes add the leg regions. */
@@ -381,6 +388,7 @@ export class CharacterBuilder {
 			candidates.find((a) => !taken.has(a)) ?? candidates[candidates.length - 1];
 		// A ranged weapon only ever shows drawn, never sheathed, and then it is the only thing held.
 		// Sheathed melee gear still shows on the body, which with a drawn bow is the game's ranged stance.
+		const showEnchants = app.showEnchants !== false;
 		const melee = [EquipmentSlot.MainHand, EquipmentSlot.OffHand];
 		const drawRanged = !!(app.drawRanged && bySlot.get(EquipmentSlot.Ranged)?.display.leftModel);
 		const heldSlots = drawRanged ? [EquipmentSlot.Ranged, ...(app.sheathed ? melee : [])] : melee;
@@ -413,6 +421,7 @@ export class CharacterBuilder {
 					item.display.leftModelTexture,
 					attachment,
 					item.display.particleColorId,
+					showEnchants ? item.enchant : 0,
 				),
 			);
 		}
@@ -470,7 +479,14 @@ export class CharacterBuilder {
 					inventoryType = InventoryType.Shield;
 			}
 			// How it is carried follows the model on show, not the item underneath.
-			out.push({ slot: it.slot, display, inventoryType, sheatheType: look?.sheatheType ?? 0 });
+			out.push({
+				slot: it.slot,
+				display,
+				inventoryType,
+				sheatheType: look?.sheatheType ?? 0,
+				// The transmog only lends its look; the enchant stays the real item's.
+				enchant: it.enchant ?? 0,
+			});
 		}
 		return out;
 	}
@@ -503,6 +519,7 @@ export class CharacterBuilder {
 		texture: string,
 		attachment: AttachmentId,
 		particleColorId: number,
+		enchant = 0,
 	): Promise<void> {
 		const modelPath = objectComponentPath(folder, modelName, "m2");
 		try {
@@ -519,10 +536,31 @@ export class CharacterBuilder {
 				const row = (await this.data.particleColors()).get(particleColorId);
 				if (row) inst.setParticleColors(row.colors);
 			}
-			if (!body.attachModel(inst, attachment)) inst.dispose();
+			if (!body.attachModel(inst, attachment)) return inst.dispose();
+			if (enchant) await this.attachEnchantVisuals(inst, enchant);
 		} catch (e) {
 			console.warn(`Failed to attach ${modelPath}: ${e instanceof Error ? e.message : e}`);
 		}
+	}
+
+	/**
+	 * Hangs an enchant's effect models off the item model's five ItemVisual attachments. Items with
+	 * none of those attachments, such as most armour, simply show nothing.
+	 */
+	private async attachEnchantVisuals(item: M2Instance, enchant: number): Promise<void> {
+		const models = await this.data.enchantVisualModels(enchant);
+		await Promise.all(
+			models.map(async (path, slot) => {
+				if (!path) return;
+				try {
+					const model = await this.assets.loadModel(path);
+					const inst = await M2Instance.create(model, this.assets, this.lighting);
+					if (!item.attachModel(inst, ITEM_VISUAL_ATTACHMENTS[slot])) inst.dispose();
+				} catch (e) {
+					console.warn(`Failed to attach enchant visual ${path}: ${e instanceof Error ? e.message : e}`);
+				}
+			}),
+		);
 	}
 }
 

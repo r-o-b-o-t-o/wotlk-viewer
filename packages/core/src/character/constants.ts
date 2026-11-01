@@ -62,7 +62,7 @@ export enum InventoryType {
 	Relic = 28,
 }
 
-/** M2 attachment point ids. */
+/** M2 attachment point ids. The first five double as ItemVisual0-4 on an item model. */
 export enum AttachmentId {
 	Shield = 0,
 	HandRight = 1,
@@ -100,6 +100,15 @@ export enum AttachmentId {
 	HipWeaponRight = 33,
 	Chest = 34,
 }
+
+/** Attachments an item model carries its visual effects on, one per ItemVisuals.dbc slot. */
+export const ITEM_VISUAL_ATTACHMENTS = [
+	AttachmentId.Shield,
+	AttachmentId.HandRight,
+	AttachmentId.HandLeft,
+	AttachmentId.ElbowRight,
+	AttachmentId.ElbowLeft,
+];
 
 /** Character geoset groups (geoset id = group * 100 + variant). */
 export enum GeosetGroup {

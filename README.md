@@ -207,7 +207,11 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - `ParticleColor.dbc` recolouring follows the `ParticleColorID` on `ItemDisplayInfo` and `CreatureDisplayInfo`. An
   emitter also has to ask for a colour set with a `particleColorIndex` of 11, 12 or 13, which narrows it to 38 items
   (all shoulders) and 381 creature displays.
-- Enchant visuals (`ItemVisuals.dbc`) are not shown.
+- An enchant's effect follows `SpellItemEnchantment.ItemVisual` into `ItemVisuals.dbc`, whose five slots hang one
+  `ItemVisualEffects.dbc` model each on the item model's ItemVisual attachments (ids 0-4). 225 of the 2,656
+  enchants name a visual; 29 of their 618 slots in use hold junk in place of an effect id, all on enchants no
+  spell grants, and are skipped. An item's own `ItemDisplayInfo.ItemVisual`, which is what makes a legendary glow without an
+  enchant, is not read.
 - A ranged weapon is only drawn on request (`drawRanged: true`), held in the left hand and the only thing held;
   the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath
   attachments derived from `Item.dbc` `SheatheType`, and held off-hand items disappear, like in the game.

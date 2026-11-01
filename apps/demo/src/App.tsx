@@ -58,6 +58,7 @@ export function App(): JSX.Element {
 		showHelm: true,
 		showCloak: true,
 		showTabard: true,
+		showEnchants: true,
 	});
 	const [modelPath, setModelPath] = createSignal(MODELS[0]);
 	const [animation, setAnimation] = createSignal(0);
@@ -106,6 +107,17 @@ export function App(): JSX.Element {
 		setMode("character");
 	};
 
+	/** The transmog only lends an item its look, so the enchant stays the real item's either way. */
+	const characterItems = (c: CharacterDetails, transmog: boolean): CharacterItem[] =>
+		c.equipment
+			.filter((e) => !(transmog && e.transmogHidden))
+			.map((e) => ({
+				slot: e.slot,
+				itemEntry: e.itemEntry,
+				transmogEntry: transmog ? e.transmogEntry : undefined,
+				enchant: e.enchant,
+			}));
+
 	/** One store write per change, so the character is rebuilt once. */
 	const applyCharacter = (c: CharacterDetails, transmog: boolean) =>
 		setAppearance({
@@ -118,13 +130,7 @@ export function App(): JSX.Element {
 			hairColor: c.hairColor,
 			facialStyle: c.facialStyle,
 			guildEmblem: c.guild,
-			items: c.equipment
-				.filter((e) => !(transmog && e.transmogHidden))
-				.map((e) => ({
-					slot: e.slot,
-					itemEntry: e.itemEntry,
-					transmogEntry: transmog ? e.transmogEntry : undefined,
-				})),
+			items: characterItems(c, transmog),
 		});
 
 	const toggleTransmog = (on: boolean) => {
@@ -328,6 +334,14 @@ export function App(): JSX.Element {
 								onChange={(e) => toggleTransmog(e.currentTarget.checked)}
 							/>{" "}
 							Transmog
+						</label>
+						<label>
+							<input
+								type="checkbox"
+								checked={appearance.showEnchants}
+								onChange={(e) => setAppearance("showEnchants", e.currentTarget.checked)}
+							/>{" "}
+							Enchants
 						</label>
 						<label>
 							<input

@@ -93,6 +93,26 @@ export interface ParticleColorRow {
 	colors: number[];
 }
 
+/** SpellItemEnchantment.dbc: an enchant and the item visual its effect comes from. */
+export interface SpellItemEnchantment {
+	id: number;
+	name: string;
+	/** ItemVisuals.dbc id; 0 for an enchant with no visible effect. */
+	itemVisualId: number;
+}
+
+/** ItemVisuals.dbc: one ItemVisualEffects id per ItemVisual attachment of an item model. */
+export interface ItemVisualRow {
+	id: number;
+	effects: number[];
+}
+
+/** ItemVisualEffects.dbc: the model one slot of an item visual hangs on its attachment. */
+export interface ItemVisualEffect {
+	id: number;
+	model: string;
+}
+
 export interface HelmetGeosetVisData {
 	id: number;
 	/** Race bitmasks (bit `race`) for: hair, facial1, facial2, facial3, ears, misc, eyes. */
@@ -243,6 +263,43 @@ export class GameData {
 		return this.table("ParticleColor", (d) =>
 			byId(d.map((i) => ({ id: d.uint(i, 0), colors: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((f) => d.uint(i, f)) }))),
 		);
+	}
+
+	spellItemEnchantments(): Promise<Map<number, SpellItemEnchantment>> {
+		return this.table("SpellItemEnchantment", (d) =>
+			byId(d.map((i) => ({ id: d.uint(i, 0), name: d.string(i, 14), itemVisualId: d.uint(i, 31) }))),
+		);
+	}
+
+	itemVisuals(): Promise<Map<number, ItemVisualRow>> {
+		return this.table("ItemVisuals", (d) =>
+			byId(d.map((i) => ({ id: d.uint(i, 0), effects: [1, 2, 3, 4, 5].map((f) => d.uint(i, f)) }))),
+		);
+	}
+
+	itemVisualEffects(): Promise<Map<number, ItemVisualEffect>> {
+		return this.table("ItemVisualEffects", (d) =>
+			byId(d.map((i) => ({ id: d.uint(i, 0), model: d.string(i, 1) }))),
+		);
+	}
+
+	/**
+	 * Model an enchant hangs on each of an item model's five ItemVisual attachments, in slot order and
+	 * null where the slot is empty. Most rows name one model five times, so the effect runs the length
+	 * of a weapon; a few mix models. 29 of the 618 slots in use hold junk in place of an effect id,
+	 * all on enchants no spell grants, and come back null too.
+	 */
+	async enchantVisualModels(enchantId: number): Promise<(string | null)[]> {
+		const enchant = (await this.spellItemEnchantments()).get(enchantId);
+		if (!enchant?.itemVisualId) return [];
+		const visual = (await this.itemVisuals()).get(enchant.itemVisualId);
+		if (!visual) return [];
+		const effects = await this.itemVisualEffects();
+		return visual.effects.map((id) => {
+			// DBC model names carry an .mdx extension; the files are .m2.
+			const model = effects.get(id)?.model ?? "";
+			return /\.(mdx|mdl|m2)$/i.test(model) ? model.replace(/\.(mdx|mdl)$/i, ".m2") : null;
+		});
 	}
 
 	helmetGeosetVisData(): Promise<Map<number, HelmetGeosetVisData>> {

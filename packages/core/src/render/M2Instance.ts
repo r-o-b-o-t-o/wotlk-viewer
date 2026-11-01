@@ -1,7 +1,7 @@
 import { Bone, Camera, DetachedBindMode, Matrix4, Object3D, Skeleton, SkinnedMesh, Texture, Vector3 } from "three";
 import type { AssetManager } from "../AssetManager.js";
 import { M2Animator, type BillboardBasis } from "../animation/M2Animator.js";
-import { M2Combiner, M2TextureType, type M2Attachment } from "../formats/m2.js";
+import { M2BlendMode, M2Combiner, M2TextureType, type M2Attachment } from "../formats/m2.js";
 import { M2Material, TexCoordSource, type M2Lighting } from "./M2Material.js";
 import type { M2Model } from "./M2Model.js";
 import { ParticleSystem, type EmitterFrames } from "./ParticleSystem.js";
@@ -28,6 +28,12 @@ const tmpSceneBasis: BillboardBasis = { right: new Vector3(), up: new Vector3(),
 const SCENE_DOWN = new Vector3(0, -1, 0);
 /** An emitter takes a ParticleColor.dbc set when its index is this, one past it, or two past it. */
 const PARTICLE_COLOR_FIRST_INDEX = 11;
+/**
+ * Divides an emitter's priority plane down into a fraction of the step between one instance's render
+ * order and the next, so that the plane orders emitters against each other without any of them
+ * leaving their own instance's place in the scene. The client's widest plane either way is 100.
+ */
+const PLANE_STEP = 256;
 // Right-handed like a camera basis (right x up = back), so quads are not mirrored without a camera.
 const DEFAULT_BASIS: BillboardBasis = {
 	right: new Vector3(0, 1, 0),
@@ -111,6 +117,7 @@ export class M2Instance extends Object3D {
 
 		this.particles = m2.particleEmitters.map((e) => new ParticleSystem(e, assets.whiteTexture, lighting));
 		for (const ps of this.particles) this.add(ps.mesh);
+		this.setRenderOrder(0);
 		this.applyTextures();
 	}
 
@@ -230,10 +237,26 @@ export class M2Instance extends Object3D {
 		this.detachModel(child);
 		child.matrixAutoUpdate = false;
 		// Items draw before the body, so a helmet's translucent parts cannot paint over the face behind it.
-		child.mesh.renderOrder = this.mesh.renderOrder - 1;
+		child.setRenderOrder(this.mesh.renderOrder - 1);
 		this.attached.push({ instance: child, attachment: m2.attachments[idx] });
 		this.add(child);
 		return true;
+	}
+
+	/**
+	 * Seats this instance's meshes at `base`, its emitters nudged off it by their priority plane. The
+	 * client sorts an emitter against the model's geometry by that plane; here the body is a single
+	 * object, so the plane orders emitters among themselves and against the body as a whole.
+	 */
+	private setRenderOrder(base: number): void {
+		this.mesh.renderOrder = base;
+		for (const ps of this.particles) {
+			// Only the emitters the client sorts by plane take one. The two blend modes it sends to the
+			// opaque pass instead are sorted there by their material, depth deciding the picture, so they
+			// keep the front-to-back order three.js gives them.
+			const plane = ps.emitter.blendMode > M2BlendMode.AlphaKey ? ps.emitter.priorityPlane : 0;
+			ps.mesh.renderOrder = base + plane / PLANE_STEP;
+		}
 	}
 
 	detachModel(child: M2Instance): void {

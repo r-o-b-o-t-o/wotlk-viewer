@@ -216,7 +216,9 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   file order under that, instead of being depth-sorted per submesh: every batch of a mesh shares one sort key in
   three.js. That covers the glue backdrops, which lean on the planes heavily, and about one model in twenty sets
   them at all; the rest fall back to the same file order as before. Models whose translucent layers need a
-  viewpoint-dependent order can still stack wrongly.
+  viewpoint-dependent order can still stack wrongly. A particle emitter carries its own plane the same way, but
+  since the body is one object the plane only orders an emitter against the other emitters and against the body
+  as a whole, where the client sorts it against each geometry batch in turn.
 - The second texture layer's combiner comes from `textureCombinerCombos`, indexed by the batch's shader id. The
   first layer's op is assumed to be a modulate, which holds on all but two of the client's item batches, and the
   Decal, Fade and Envmap ops are not modelled and fall back to a modulate. Batches never carry more than two

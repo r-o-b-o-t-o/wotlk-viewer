@@ -199,7 +199,8 @@ export class CharacterBuilder {
 		groups.set(GeosetGroup.Facial3, fg[1]);
 		groups.set(GeosetGroup.Facial2, fg[2]);
 		groups.set(GeosetGroup.Facial4, fg[3]);
-		groups.set(GeosetGroup.EyeGlow, app.classId === DEATH_KNIGHT_CLASS ? 3 : fg[4]);
+		const eyeGlow = app.classId === DEATH_KNIGHT_CLASS;
+		groups.set(GeosetGroup.EyeGlow, eyeGlow ? 3 : fg[4]);
 
 		const setGroup = (group: GeosetGroup, value: number) => {
 			if (value > 0) groups.set(group, 1 + value);
@@ -246,14 +247,19 @@ export class CharacterBuilder {
 				// ears only line up with the races they are named after this way.
 				const bit = 1 << race;
 				const hides = (i: number) => (vis.hideGeoset[i] & bit) !== 0;
+				// Hiding swaps in the group's variant 1 — the capped scalp, the trimmed ears — rather
+				// than dropping the group, which would leave a hole where the helm does not reach.
 				if (hides(0)) {
 					groups.set(GeosetGroup.Hair, 1);
 					hideHair = true;
 				}
-				if (hides(1)) groups.set(GeosetGroup.Facial1, 0);
-				if (hides(2)) groups.set(GeosetGroup.Facial2, 0);
-				if (hides(3)) groups.set(GeosetGroup.Facial3, 0);
-				if (hides(4)) groups.set(GeosetGroup.Ears, 0);
+				if (hides(1)) groups.set(GeosetGroup.Facial1, 1);
+				if (hides(2)) groups.set(GeosetGroup.Facial2, 1);
+				if (hides(3)) groups.set(GeosetGroup.Facial3, 1);
+				if (hides(4)) groups.set(GeosetGroup.Ears, 1);
+				if (hides(5)) groups.set(GeosetGroup.Facial4, 1);
+				// A death knight's glow survives any helm: the client forces it on at draw time.
+				if (hides(6) && !eyeGlow) groups.set(GeosetGroup.EyeGlow, 1);
 			}
 		}
 		body.setGeosetFilter((id) => id === 0 || groups.get(Math.floor(id / 100)) === id % 100);

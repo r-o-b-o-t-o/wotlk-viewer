@@ -214,6 +214,13 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   enchants name a visual; 29 of their 618 slots in use hold junk in place of an effect id, all on enchants no
   spell grants, and are skipped. An item's own `ItemDisplayInfo.ItemVisual`, which is what makes a legendary glow without an
   enchant, is not read.
+- Glowing eyes (geoset 1703) are turned on for the death knight class alone. The client also lights them for a
+  face whose `CharSections` row carries flag 0x4, which in 3.3.5a marks the death knight face and skin colour
+  combinations — face variations 12-23 plus the pale re-colours of a couple of ordinary faces, per race. Picking
+  one of those on a character of another class, which the demo's free appearance pickers allow and the game does
+  not, leaves the eyes dark here. A helm that hides the eye glow never reaches a death knight: the client forces
+  the geoset back on at draw time, after the helmet masks.
+
 - A ranged weapon is only drawn on request (`drawRanged: true`), held in the left hand and the only thing held;
   the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath
   attachments derived from `Item.dbc` `SheatheType`, and held off-hand items disappear, like in the game.

@@ -180,6 +180,10 @@ varying vec3 vNormal;
 varying vec3 vViewPos;
 
 void main() {
+  // A batch whose own alpha has faded away never reaches the client's draw list at all. The alpha
+  // test cannot stand in for that, an alpha-key ref falling with the alpha and an opaque one being
+  // zero throughout, and neither mode looks at alpha when it blends: both would paint on regardless.
+  if (uColor.a < 0.0001) discard;
   vec4 t0 = texture2D(uTex0, vUv0);
   vec3 rgb = t0.rgb * uColor.rgb;
   float a = (uOpaque ? 1.0 : t0.a) * uColor.a;
@@ -207,10 +211,11 @@ void main() {
 
 /**
  * The alpha ref the client picks per blend mode in `SetupMaterial`, compared the same way round
- * there: a fragment survives on `alpha >= ref`.
+ * there: a fragment survives on `alpha >= ref`. `alpha` is the batch's own, which alpha-key is
+ * alone in taking into account.
  */
-export function alphaTestFor(blendMode: number): number {
-	return blendMode === M2BlendMode.AlphaKey ? 224 / 255 : blendMode >= M2BlendMode.Alpha ? 1 / 255 : 0;
+export function alphaTestFor(blendMode: number, alpha = 1): number {
+	return blendMode === M2BlendMode.AlphaKey ? (224 / 255) * alpha : blendMode >= M2BlendMode.Alpha ? 1 / 255 : 0;
 }
 
 /** Configures three.js blending (and `transparent`) for an M2 blend mode. */
@@ -246,6 +251,9 @@ export function applyM2BlendMode(mat: Material, mode: number): void {
 
 /** Material for one M2 render batch. Lighting is done in gamma space like the original client. */
 export class M2Material extends ShaderMaterial {
+	/** Kept because the alpha ref is rebuilt from it whenever the batch's own alpha moves. */
+	private readonly blendMode: number;
+
 	constructor(opts: M2MaterialOptions, lighting: M2Lighting, white: Texture) {
 		const { blendMode, flags } = opts;
 		super({
@@ -273,6 +281,7 @@ export class M2Material extends ShaderMaterial {
 				uFog: { value: lighting.fog },
 			},
 		});
+		this.blendMode = blendMode;
 		this.side = flags & M2MaterialFlags.TwoSided ? DoubleSide : FrontSide;
 		this.depthTest = !(flags & M2MaterialFlags.DepthTestOff);
 		this.depthWrite = !(flags & M2MaterialFlags.DepthWriteOff);
@@ -285,6 +294,9 @@ export class M2Material extends ShaderMaterial {
 
 	setColor(r: number, g: number, b: number, a: number): void {
 		(this.uniforms.uColor.value as Vector4).set(r, g, b, a);
+		// The alpha a fragment is tested on carries this same factor, so for an alpha-key batch the two
+		// cancel and the cut stays on the texture alone: the silhouette holds however far the batch fades.
+		this.uniforms.uAlphaTest.value = alphaTestFor(this.blendMode, a);
 	}
 
 	setTextureMatrix(layer: 0 | 1, m: Matrix4 | null): void {

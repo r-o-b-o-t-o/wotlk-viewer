@@ -231,11 +231,6 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   `m_fadeAlpha`), and stops drawing either once the product falls under 1e-4. That fade is gameplay state —
   stealth, a dying unit, a missile fading in with distance, a glue frame fading up — and never comes out of the M2
   file, so the factor would be a constant 1 here. Only a caller that wants to fade a model needs it.
-- An alpha-key batch is cut at a flat 224/255. The client scales that threshold by the batch's own animated alpha
-  and then compares it against an alpha carrying the same factor, so the two cancel and the cut lands on the
-  texture alone: its silhouette holds steady however the batch fades. Here a batch whose alpha drops under 0.88
-  vanishes outright instead. That reaches 495 of the client's 8,947 alpha-key batches, across 173 models: 86 world
-  doodads, 75 creatures, 10 spell effects and 2 item models.
 - Bezier tracks are treated as hermite.
 - Sequence switching is instant (no `blendTime` cross-fade) and Stand variations are not randomized (always variation 0
   unless you pass one).

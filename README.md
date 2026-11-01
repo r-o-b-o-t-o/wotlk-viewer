@@ -145,6 +145,8 @@ Endpoints:
   `item_instance`). Both transmog fields come from mod-transmog's `custom_transmogrification` table, whose
   entry 1 means "hidden" rather than an appearance; the module is optional, so the server probes for that
   table once and omits the fields when it is absent. Drop the items flagged `transmogHidden` before building.
+  `hideHelm` / `hideCloak` are the two `characters.playerFlags` bits by which a player turns either piece of gear
+  off; they map onto `showHelm` / `showCloak`, and the rest of the flags stay on the server.
   `guild: { id, name, emblemStyle, emblemColor, borderStyle, borderColor, backgroundColor }` follows
   `guild_member` and is absent for a character without a guild; pass its emblem fields as `guildEmblem`.
   `pet: { entry, displayId, name, level, family, tamed }` is the `character_pet` row in slot 0, the one the

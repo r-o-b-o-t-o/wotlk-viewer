@@ -59,6 +59,10 @@ export interface CharacterPet {
 /** `character_pet.PetType` of a tamed hunter pet; 0 is a summon. */
 const HUNTER_PET = 1;
 
+/** `characters.playerFlags` bits for the two pieces of gear a player can turn off. */
+const PLAYER_FLAGS_HIDE_HELM = 0x400;
+const PLAYER_FLAGS_HIDE_CLOAK = 0x800;
+
 /** Guild membership; the emblem fields are what a guild tabard is painted with. */
 export interface CharacterGuild {
 	id: number;
@@ -76,6 +80,10 @@ export interface CharacterDetails extends CharacterSummary {
 	hairStyle: number;
 	hairColor: number;
 	facialStyle: number;
+	/** The character turned their helm off; the rest of `playerFlags` is none of a viewer's business. */
+	hideHelm: boolean;
+	/** The character turned their cloak off. */
+	hideCloak: boolean;
 	equipment: EquippedItem[];
 	guild?: CharacterGuild;
 	/** Active pet, for the classes that have one. */
@@ -115,7 +123,7 @@ export class CharacterDb {
 		const [transmog, world] = await Promise.all([this.hasTransmog(), this.worldDatabase()]);
 		const [rows] = await this.pool.query<RowDataPacket[]>(
 			`SELECT c.guid, c.name, c.race, c.class, c.gender, c.level, c.skin, c.face, c.hairStyle, c.hairColor,
-              c.facialStyle, g.guildid, g.name AS guildName,
+              c.facialStyle, c.playerFlags, g.guildid, g.name AS guildName,
               g.EmblemStyle, g.EmblemColor, g.BorderStyle, g.BorderColor, g.BackgroundColor,
               cp.entry AS petEntry, cp.modelid AS petModelId, cp.name AS petName, cp.level AS petLevel,
               cp.PetType AS petType${world ? ", ct.family AS petFamily" : ""}
@@ -148,6 +156,8 @@ export class CharacterDb {
 			hairStyle: c.hairStyle,
 			hairColor: c.hairColor,
 			facialStyle: c.facialStyle,
+			hideHelm: (c.playerFlags & PLAYER_FLAGS_HIDE_HELM) !== 0,
+			hideCloak: (c.playerFlags & PLAYER_FLAGS_HIDE_CLOAK) !== 0,
 			guild: c.guildid
 				? {
 						id: c.guildid,

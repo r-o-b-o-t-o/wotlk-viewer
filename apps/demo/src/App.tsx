@@ -130,13 +130,17 @@ export function App(): JSX.Element {
 			hairColor: c.hairColor,
 			facialStyle: c.facialStyle,
 			guildEmblem: c.guild,
+			// The character's own choice to hide either piece, as the game stores it.
+			showHelm: !c.hideHelm,
+			showCloak: !c.hideCloak,
 			items: characterItems(c, transmog),
 		});
 
 	const toggleTransmog = (on: boolean) => {
 		setShowTransmog(on);
 		const c = dbCharacter();
-		if (c) applyCharacter(c, on);
+		// Only the equipment changes, so the toggles the user has set since loading stay put.
+		if (c) setAppearance("items", characterItems(c, on));
 	};
 
 	const itemEntry = (slot: EquipmentSlot) => appearance.items?.find((i) => i.slot === slot)?.itemEntry ?? "";

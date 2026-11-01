@@ -274,7 +274,14 @@ export class M2Material extends ShaderMaterial {
 				uColor: { value: new Vector4(1, 1, 1, 1) },
 				uAlphaTest: { value: alphaTestFor(blendMode) },
 				uOpaque: { value: blendMode === M2BlendMode.Opaque },
-				uUnlit: { value: (flags & M2MaterialFlags.Unlit) !== 0 },
+				// `s_localLighting` denies the two modulate modes the scene lighting whatever the material's
+				// own bit says; `setColor` supplies the flat colour that goes with it.
+				uUnlit: {
+					value:
+						(flags & M2MaterialFlags.Unlit) !== 0 ||
+						blendMode === M2BlendMode.Mod ||
+						blendMode === M2BlendMode.Mod2x,
+				},
 				// Fog washes an additive or modulated batch out instead of dimming it, so only the
 				// modes that paint over what is behind them take any.
 				uUnfogged: { value: (flags & M2MaterialFlags.Unfogged) !== 0 || blendMode > M2BlendMode.Alpha },
@@ -282,6 +289,9 @@ export class M2Material extends ShaderMaterial {
 			},
 		});
 		this.blendMode = blendMode;
+		// Through the setter, so a batch nothing has animated yet still starts on the colour its blend
+		// mode calls for rather than plain white.
+		this.setColor(1, 1, 1, 1);
 		this.side = flags & M2MaterialFlags.TwoSided ? DoubleSide : FrontSide;
 		this.depthTest = !(flags & M2MaterialFlags.DepthTestOff);
 		this.depthWrite = !(flags & M2MaterialFlags.DepthWriteOff);
@@ -293,6 +303,11 @@ export class M2Material extends ShaderMaterial {
 	}
 
 	setColor(r: number, g: number, b: number, a: number): void {
+		// A modulate batch takes none of the colour: `SetupLighting` zeroes its lit term and hands it a
+		// flat emissive instead, 1 for Mod and a half for Mod2x, whose blend doubles the result back up.
+		// Only the alpha survives, which is why the track is still read for it.
+		if (this.blendMode === M2BlendMode.Mod) r = g = b = 1;
+		else if (this.blendMode === M2BlendMode.Mod2x) r = g = b = 0.5;
 		(this.uniforms.uColor.value as Vector4).set(r, g, b, a);
 		// The alpha a fragment is tested on carries this same factor, so for an alpha-key batch the two
 		// cancel and the cut stays on the texture alone: the silhouette holds however far the batch fades.

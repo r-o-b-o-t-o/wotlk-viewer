@@ -233,6 +233,19 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   `m_fadeAlpha`), and stops drawing either once the product falls under 1e-4. That fade is gameplay state —
   stealth, a dying unit, a missile fading in with distance, a glue frame fading up — and never comes out of the M2
   file, so the factor would be a constant 1 here. Only a caller that wants to fade a model needs it.
+- A rotation track holding a single key for a single sequence does not turn a model's **root** bone
+  (index 0, which has no parent) unless it runs off a global sequence. A tally over `Item`, `Creature` and
+  `Character` finds exactly four such keys, every one on a shoulder pad: `LShoulder`/`RShoulder_Cloth_PVPPriest_B_01`,
+  `RShoulder_Cloth_PVPMage_B_01` and `RShoulder_Leather_Northrend_B_03`. Applying the 114 degrees they ask for
+  turns the pad to face backwards, which is not how the game wears them. The same tally finds 148 lone keys on
+  bones further down, and those are real posing the viewer keeps: the two that lay the glow of
+  `Sword_2H_Frostmourne_D_01` along its blade rather than across it, the three gems a `Helm_Leather_Sunwell` turns
+  outwards, and so on. The attachment drives an item's root bone, which is why a rotation baked onto that one bone
+  reads as an authoring leftover while the others do not.
+  The client's own guard on these tracks, `count > 1 || keys > m_uint90`, does not explain the difference: it is
+  blind to which bone a track sits on, and `m_uint90` is 0 on a model's first frame, so by the decompilation the
+  client samples the key once and reuses the cached value forever. The rule above comes from the files and from
+  how the game looks, not from that guard, so a model posing differently here is worth a second look.
 - Bezier tracks are treated as hermite.
 - Sequence switching is instant (no `blendTime` cross-fade) and Stand variations are not randomized (always variation 0
   unless you pass one).

@@ -1,5 +1,5 @@
 import { Matrix4, Quaternion, Vector3 } from "three";
-import { M2BoneFlags, type M2Track } from "../formats/m2.js";
+import { M2BoneFlags, type M2Bone, type M2Track } from "../formats/m2.js";
 import type { M2Model } from "../render/M2Model.js";
 import { sampleTrack, type TrackKeys, type TrackKind } from "./tracks.js";
 
@@ -136,6 +136,19 @@ export class M2Animator {
 		return this.sample(this.model.keys(track, this.sequence, kind), track.globalSeq, tmpV) ? tmpV[0] : fallback;
 	}
 
+	/**
+	 * A bone's rotation keys, dropping a lone key that turns the model's own root bone outside a
+	 * global sequence. Those four are export leftovers that face a shoulder pad backwards; keys on
+	 * any other bone are real posing, the two that lay Frostmourne's glow along its blade among
+	 * them. README has the tally.
+	 */
+	private boneRotationKeys(bone: M2Bone, index: number, seq: number): TrackKeys | null {
+		const track = bone.rotation;
+		const lone = track.timestamps.length === 1 && track.timestamps[0].count === 1;
+		if (lone && index === 0 && bone.parentBone < 0 && track.globalSeq < 0) return null;
+		return this.model.keys(track, seq, "compquat");
+	}
+
 	private evaluateBones(billboard?: BillboardBasis): void {
 		const { m2 } = this.model;
 		for (let i = 0; i < m2.bones.length; i++) {
@@ -143,7 +156,7 @@ export class M2Animator {
 			const bone = m2.bones[i];
 			const local = this.localMatrices[i];
 			const tKeys = this.model.keys(bone.translation, seq, "vec3");
-			const rKeys = this.model.keys(bone.rotation, seq, "compquat");
+			const rKeys = this.boneRotationKeys(bone, i, seq);
 			const sKeys = this.model.keys(bone.scale, seq, "vec3");
 			const [px, py, pz] = bone.pivot;
 

@@ -297,8 +297,8 @@ export class M2Instance extends Object3D {
 			tmpFrames.scene = camera ? tmpSceneBasis : DEFAULT_BASIS;
 			tmpFrames.world.copy(this.matrixWorld);
 			tmpFrames.worldInverse.copy(this.matrixWorld).invert();
-			// A creature display or a pet scales the whole instance, which particles drawn in the scene
-			// are outside of; the emitter's own frame carries it for the others.
+			// A creature display or a pet scales the whole instance; an emitter needs it to work out how
+			// much of its own scale is reaching the sprites.
 			tmpFrames.worldScale = tmpVec.setFromMatrixColumn(this.matrixWorld, 0).length();
 			for (const ps of this.particles) {
 				const bone = boneMatrices[ps.emitter.bone] ?? IDENTITY_BIND;

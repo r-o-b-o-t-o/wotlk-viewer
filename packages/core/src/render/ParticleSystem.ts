@@ -122,7 +122,7 @@ export interface EmitterFrames {
 	world: Matrix4;
 	/** Its inverse, which brings the scene back into the instance. */
 	worldInverse: Matrix4;
-	/** The instance's uniform world scale, which turns its own units into the scene's. */
+	/** The instance's uniform world scale, which an emitter's own scale is measured on top of. */
 	worldScale: number;
 	/** Down in the scene, which gravity follows for particles shed into it. */
 	sceneDown: Vector3;
@@ -185,6 +185,8 @@ export class ParticleSystem {
 	private readonly xyQuad: boolean;
 	/** Turn the head quad to lie along the particle's own travel instead of spinning it. */
 	private readonly velocityOrient: boolean;
+	/** Let the emitter's own scale reach the sprites; a shed emitter only, in the client. */
+	private readonly inheritBoneScale: boolean;
 	/** Write the quads back to front rather than in array order. */
 	private readonly sorted: boolean;
 	/** Particle indices, farthest first; refilled every frame a sorted emitter draws. */
@@ -242,6 +244,7 @@ export class ParticleSystem {
 		this.implode = sphere && (emitter.flags & M2ParticleFlags.ImplosionFilter) !== 0;
 		this.xyQuad = (emitter.flags & M2ParticleFlags.XyQuad) !== 0;
 		this.velocityOrient = (emitter.flags & M2ParticleFlags.VelocityOrient) !== 0;
+		this.inheritBoneScale = (emitter.flags & M2ParticleFlags.InheritBoneScale) !== 0;
 		this.sorted = (emitter.flags & M2ParticleFlags.SortParticles) !== 0;
 		this.sortDepth = new Float32Array(this.sorted ? maxParticles : 0);
 		this.twinkleBase = emitter.twinkleScale[0];
@@ -331,6 +334,12 @@ export class ParticleSystem {
 		// A local-frame emitter simulates in its own frame and hands that frame to the mesh, so the
 		// particles ride the bone however it moves. Everything else is baked into the scene at birth,
 		// which is where the client's frame of reference leaves it for a character standing still.
+		//
+		// The client sizes a sprite in the space it draws it in, so an emitter's own scale reaches one
+		// only where `InheritBoneScale` asks, and only on an emitter shed into the scene. Here a quad is
+		// built where it is simulated and carried out by a matrix, so that scale arrives unasked: the
+		// shed branch puts it back only when the flag wants it, and the local one takes it out again.
+		const emitterScale = frames.worldScale * Math.hypot(bone.elements[0], bone.elements[1], bone.elements[2]);
 		let basis: BillboardBasis;
 		let down: Vector3;
 		if (this.localFrame) {
@@ -338,13 +347,13 @@ export class ParticleSystem {
 			this.mesh.matrix.copy(this.emitterFrame);
 			basis = basisIn(this.emitterFrame, frames.local);
 			down = LOCAL_DOWN;
-			this.sizeScale = 1;
+			this.sizeScale = emitterScale > 1e-6 ? 1 / emitterScale : 1;
 		} else {
 			this.toSim.multiplyMatrices(frames.world, this.emitterFrame);
 			this.mesh.matrix.copy(frames.worldInverse);
 			basis = frames.scene;
 			down = frames.sceneDown;
-			this.sizeScale = frames.worldScale;
+			this.sizeScale = this.inheritBoneScale ? emitterScale : 1;
 		}
 		// The mesh's matrix is set after the viewer walked the graph, so ask for one more composition.
 		this.mesh.matrixWorldNeedsUpdate = true;

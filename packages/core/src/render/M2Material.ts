@@ -205,9 +205,12 @@ void main() {
 }
 `;
 
-/** Alpha test threshold used by the client for a blend mode. */
+/**
+ * The alpha ref the client picks per blend mode in `SetupMaterial`, compared the same way round
+ * there: a fragment survives on `alpha >= ref`.
+ */
 export function alphaTestFor(blendMode: number): number {
-	return blendMode === M2BlendMode.AlphaKey ? 0.5 : blendMode >= M2BlendMode.Alpha ? 1 / 255 : 0;
+	return blendMode === M2BlendMode.AlphaKey ? 224 / 255 : blendMode >= M2BlendMode.Alpha ? 1 / 255 : 0;
 }
 
 /** Configures three.js blending (and `transparent`) for an M2 blend mode. */

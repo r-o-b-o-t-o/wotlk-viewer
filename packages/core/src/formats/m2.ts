@@ -225,6 +225,7 @@ export interface M2Data {
 	attachmentLookup: Int16Array;
 	lights: M2Light[];
 	cameras: M2Camera[];
+	ribbonEmitters: M2Ribbon[];
 	particleEmitters: M2ParticleEmitter[];
 	/** Source bytes: embedded sequence data is read from here. */
 	reader: BinaryReader;
@@ -240,6 +241,34 @@ export interface M2PartTrack {
 	comp: number;
 	/** Always linear. */
 	interpolation: number;
+}
+
+/**
+ * Trail of quads laid down behind a moving bone. The emitter drops an edge — a pair of points
+ * `heightAbove` up and `heightBelow` down the bone's Y — `edgesPerSecond` times a second, and each
+ * edge stays for `edgeLifetime` seconds, so the strip between them draws the path the bone took.
+ */
+export interface M2Ribbon {
+	id: number;
+	bone: number;
+	/** Emitter origin relative to `bone`. */
+	position: [number, number, number];
+	/** Indices into the M2 texture list, one layer each; the strip is drawn once per layer. */
+	textures: Uint16Array;
+	/** Material per layer, indexed as `textures` is. */
+	materials: Uint16Array;
+	color: M2Track; // vec3
+	alpha: M2Track; // fixed16
+	heightAbove: M2Track; // float
+	heightBelow: M2Track; // float
+	edgesPerSecond: number;
+	edgeLifetime: number;
+	gravity: number;
+	textureRows: number;
+	textureCols: number;
+	textureSlot: M2Track; // u16
+	enabledIn: M2Track; // uint8
+	priorityPlane: number;
 }
 
 export interface M2ParticleEmitter {
@@ -401,6 +430,47 @@ function readPartTrack(r: BinaryReader, comp: number, kind: "fixed16" | "float" 
 	}
 	return { times, values, comp, interpolation: 1 };
 }
+
+// 176 bytes in version 264.
+const readRibbon = (r: BinaryReader): M2Ribbon => {
+	const id = r.u32();
+	const bone = r.u16();
+	r.skip(2);
+	const position = r.vec3();
+	const textures = readArray(r);
+	const materials = readArray(r);
+	const color = readTrack(r);
+	const alpha = readTrack(r);
+	const heightAbove = readTrack(r);
+	const heightBelow = readTrack(r);
+	const edgesPerSecond = r.f32();
+	const edgeLifetime = r.f32();
+	const gravity = r.f32();
+	const textureRows = r.u16();
+	const textureCols = r.u16();
+	const textureSlot = readTrack(r);
+	const enabledIn = readTrack(r);
+	const priorityPlane = r.i16();
+	return {
+		id,
+		bone,
+		position,
+		textures: r.u16ArrayAt(textures.offset, textures.count),
+		materials: r.u16ArrayAt(materials.offset, materials.count),
+		color,
+		alpha,
+		heightAbove,
+		heightBelow,
+		edgesPerSecond,
+		edgeLifetime,
+		gravity,
+		textureRows,
+		textureCols,
+		textureSlot,
+		enabledIn,
+		priorityPlane,
+	};
+};
 
 // 476 bytes in version 264.
 const readParticle = (r: BinaryReader): M2ParticleEmitter => {
@@ -652,7 +722,8 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 	r.skip(8); // events: unused
 	const lights = readArray(r);
 	const cameras = readArray(r);
-	r.skip(8 * 2); // camera lookup and ribbons: unused
+	r.skip(8); // camera lookup: unused
+	const ribbons = readArray(r);
 	const particles = readArray(r);
 	// Only present with the global flag, and always last, so nothing else shifts when it is absent.
 	const combinerCombos =
@@ -704,6 +775,7 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 		attachmentLookup: i16(attachmentLookup),
 		lights: readList(r, lights, 156, readLight),
 		cameras: readList(r, cameras, 100, readCamera),
+		ribbonEmitters: readList(r, ribbons, 176, readRibbon),
 		particleEmitters: readList(r, particles, 476, readParticle),
 		reader: r,
 	};

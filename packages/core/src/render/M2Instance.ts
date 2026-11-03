@@ -5,6 +5,7 @@ import { M2BlendMode, M2Combiner, M2TextureType, type M2Attachment } from "../fo
 import { M2Material, TexCoordSource, type M2Lighting } from "./M2Material.js";
 import type { M2Model } from "./M2Model.js";
 import { ParticleSystem, type EmitterFrames } from "./ParticleSystem.js";
+import { RibbonSystem } from "./RibbonSystem.js";
 
 export interface PlayOptions {
 	loop?: boolean;
@@ -63,6 +64,7 @@ export class M2Instance extends Object3D {
 	readonly textures: (Texture | null)[];
 	readonly attached: AttachedChild[] = [];
 	readonly particles: ParticleSystem[];
+	readonly ribbons: RibbonSystem[];
 
 	private readonly skeleton: Skeleton;
 	/** Textures created for this instance alone; disposed with it. */
@@ -117,6 +119,8 @@ export class M2Instance extends Object3D {
 
 		this.particles = m2.particleEmitters.map((e) => new ParticleSystem(e, assets.whiteTexture, lighting));
 		for (const ps of this.particles) this.add(ps.mesh);
+		this.ribbons = m2.ribbonEmitters.map((r) => new RibbonSystem(r, [assets.whiteTexture], m2.materials, lighting));
+		for (const rs of this.ribbons) this.add(...rs.meshes);
 		this.setRenderOrder(0);
 		this.applyTextures();
 	}
@@ -185,6 +189,11 @@ export class M2Instance extends Object3D {
 			}
 		});
 		for (const ps of this.particles) ps.setTexture(this.textures[ps.emitter.texture] ?? this.assets.whiteTexture);
+		for (const rs of this.ribbons)
+			rs.setTextures(
+				Array.from(rs.ribbon.textures, (t) => this.textures[t] ?? null),
+				this.assets.whiteTexture,
+			);
 	}
 
 	/** Controls which geosets (submesh ids) are drawn. */
@@ -257,6 +266,9 @@ export class M2Instance extends Object3D {
 			const plane = ps.emitter.blendMode > M2BlendMode.AlphaKey ? ps.emitter.priorityPlane : 0;
 			ps.mesh.renderOrder = base + plane / PLANE_STEP;
 		}
+		for (const rs of this.ribbons) {
+			for (const mesh of rs.meshes) mesh.renderOrder = base + rs.ribbon.priorityPlane / PLANE_STEP;
+		}
 	}
 
 	detachModel(child: M2Instance): void {
@@ -306,6 +318,10 @@ export class M2Instance extends Object3D {
 			}
 		}
 
+		for (const rs of this.ribbons) {
+			rs.update(dtMs / 1000, this.animator, boneMatrices[rs.ribbon.bone] ?? IDENTITY_BIND);
+		}
+
 		for (const { instance, attachment } of this.attached) {
 			const [x, y, z] = attachment.position;
 			instance.matrix.copy(this.animator.boneMatrices[attachment.bone]).multiply(tmpMat.makeTranslation(x, y, z));
@@ -352,6 +368,7 @@ export class M2Instance extends Object3D {
 	dispose(): void {
 		for (const m of this.materials) m.dispose();
 		for (const ps of this.particles) ps.dispose();
+		for (const rs of this.ribbons) rs.dispose();
 		for (const t of this.ownedTextures) t.dispose();
 		this.ownedTextures.clear();
 		this.skeleton.dispose();

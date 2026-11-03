@@ -187,7 +187,7 @@ quaternion and scale tracks, global sequences, external `.anim` files loaded on 
 Things deliberately left out or approximated; worth deciding on if they matter for your use case:
 
 - Particle emitters use a simplified CPU simulation: head and tail quads with spin, but no tumble, wind or spline
-  emitters. Ribbon emitters are not rendered. The head/tail choice comes from the `HeadStyle` and `TailStyle` flags,
+  emitters. The head/tail choice comes from the `HeadStyle` and `TailStyle` flags,
   not the `HeadOrTail` byte, which is 0 on every 3.3.5a emitter.
 - An emitter without `LocalFrame` sheds its particles into the scene at birth, where the client sheds them into the
   model's frame of reference — the unit's own matrix when it has one, the world otherwise. The two coincide for a

@@ -136,6 +136,11 @@ export class M2Animator {
 		return this.sample(this.model.keys(track, this.sequence, kind), track.globalSeq, tmpV) ? tmpV[0] : fallback;
 	}
 
+	/** Samples a vec3 track into the first three slots of `out`; false when it has no data. */
+	sampleVec3(track: M2Track, out: Float32Array): boolean {
+		return this.sample(this.model.keys(track, this.sequence, "vec3"), track.globalSeq, out);
+	}
+
 	/**
 	 * A bone's rotation keys, dropping a lone key that turns the model's own root bone outside a
 	 * global sequence. Those four are export leftovers that face a shoulder pad backwards; keys on

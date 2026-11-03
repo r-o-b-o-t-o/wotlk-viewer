@@ -212,8 +212,10 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - An enchant's effect follows `SpellItemEnchantment.ItemVisual` into `ItemVisuals.dbc`, whose five slots hang one
   `ItemVisualEffects.dbc` model each on the item model's ItemVisual attachments (ids 0-4). 225 of the 2,656
   enchants name a visual; 29 of their 618 slots in use hold junk in place of an effect id, all on enchants no
-  spell grants, and are skipped. An item's own `ItemDisplayInfo.ItemVisual`, which is what makes a legendary glow without an
-  enchant, is not read.
+  spell grants, and are skipped. A held item also carries its own `ItemDisplayInfo.ItemVisual`, which is what makes
+  an item glow unenchanted; an enchant's visual replaces it, the choice `CCharacterComponent::AddHandItem` makes.
+  1,633 appearances name one, 1,383 of them a row that exists. Only held items take it: a helm or shoulder shows an
+  enchant's visual and nothing else, as the client's own `AddHelm` and `AddShoulders` do.
 - Glowing eyes (geoset 1703) are turned on for the death knight class alone. The client also lights them for a
   face whose `CharSections` row carries flag 0x4, which in 3.3.5a marks the death knight face and skin colour
   combinations — face variations 12-23 plus the pale re-colours of a couple of ordinary faces, per race. Picking

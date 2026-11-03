@@ -77,6 +77,8 @@ export interface ItemDisplayInfo {
 	flags: number;
 	/** HelmetGeosetVisData ids for male / female. */
 	helmetGeosetVis: [number, number];
+	/** ItemVisuals.dbc row this appearance carries on its own, unenchanted; 0 for none. */
+	itemVisualId: number;
 	/** ParticleColor.dbc row recolouring this appearance's particles; 0 for none. */
 	particleColorId: number;
 	/** Body region textures, see ITEM_TEXTURE_SLOTS. */
@@ -252,6 +254,7 @@ export class GameData {
 					geosetGroups: [d.uint(i, 7), d.uint(i, 8), d.uint(i, 9)] as [number, number, number],
 					flags: d.uint(i, 10),
 					helmetGeosetVis: [d.uint(i, 13), d.uint(i, 14)] as [number, number],
+					itemVisualId: d.uint(i, 23),
 					particleColorId: d.uint(i, 24),
 					textures: [15, 16, 17, 18, 19, 20, 21, 22].map((f) => d.string(i, f)),
 				})),
@@ -284,15 +287,24 @@ export class GameData {
 	}
 
 	/**
-	 * Model an enchant hangs on each of an item model's five ItemVisual attachments, in slot order and
-	 * null where the slot is empty. Most rows name one model five times, so the effect runs the length
-	 * of a weapon; a few mix models. 29 of the 618 slots in use hold junk in place of an effect id,
-	 * all on enchants no spell grants, and come back null too.
+	 * The ItemVisuals row a held item shows: its enchant's, and otherwise the one the appearance
+	 * carries itself, which is where an item that glows unenchanted keeps its effect. The client
+	 * picks between the two the same way, in `CCharacterComponent::AddHandItem`. Only held items get
+	 * the appearance's own visual; a helm or shoulder shows an enchant's and nothing else.
 	 */
-	async enchantVisualModels(enchantId: number): Promise<(string | null)[]> {
-		const enchant = (await this.spellItemEnchantments()).get(enchantId);
-		if (!enchant?.itemVisualId) return [];
-		const visual = (await this.itemVisuals()).get(enchant.itemVisualId);
+	async heldItemVisual(enchantId: number, display: ItemDisplayInfo): Promise<number> {
+		const enchant = enchantId ? (await this.spellItemEnchantments()).get(enchantId) : undefined;
+		return enchant?.itemVisualId || display.itemVisualId;
+	}
+
+	/**
+	 * Model an item visual hangs on each of an item model's five ItemVisual attachments, in slot order
+	 * and null where the slot is empty. Most rows name one model five times, so the effect runs the
+	 * length of a weapon; a few mix models. 29 of the 618 slots in use hold junk in place of an effect
+	 * id, all on enchants no spell grants, and come back null too.
+	 */
+	async itemVisualModels(visualId: number): Promise<(string | null)[]> {
+		const visual = (await this.itemVisuals()).get(visualId);
 		if (!visual) return [];
 		const effects = await this.itemVisualEffects();
 		return visual.effects.map((id) => {

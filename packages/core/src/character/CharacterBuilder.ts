@@ -427,7 +427,7 @@ export class CharacterBuilder {
 					item.display.leftModelTexture,
 					attachment,
 					item.display.particleColorId,
-					showEnchants ? item.enchant : 0,
+					await this.data.heldItemVisual(showEnchants ? item.enchant : 0, item.display),
 				),
 			);
 		}
@@ -525,7 +525,7 @@ export class CharacterBuilder {
 		texture: string,
 		attachment: AttachmentId,
 		particleColorId: number,
-		enchant = 0,
+		itemVisual = 0,
 	): Promise<void> {
 		const modelPath = objectComponentPath(folder, modelName, "m2");
 		try {
@@ -543,18 +543,18 @@ export class CharacterBuilder {
 				if (row) inst.setParticleColors(row.colors);
 			}
 			if (!body.attachModel(inst, attachment)) return inst.dispose();
-			if (enchant) await this.attachEnchantVisuals(inst, enchant);
+			if (itemVisual) await this.attachItemVisuals(inst, itemVisual);
 		} catch (e) {
 			console.warn(`Failed to attach ${modelPath}: ${e instanceof Error ? e.message : e}`);
 		}
 	}
 
 	/**
-	 * Hangs an enchant's effect models off the item model's five ItemVisual attachments. Items with
-	 * none of those attachments, such as most armour, simply show nothing.
+	 * Hangs an item visual's effect models off the item model's five ItemVisual attachments. Items
+	 * with none of those attachments, such as most armour, simply show nothing.
 	 */
-	private async attachEnchantVisuals(item: M2Instance, enchant: number): Promise<void> {
-		const models = await this.data.enchantVisualModels(enchant);
+	private async attachItemVisuals(item: M2Instance, visualId: number): Promise<void> {
+		const models = await this.data.itemVisualModels(visualId);
 		await Promise.all(
 			models.map(async (path, slot) => {
 				if (!path) return;
@@ -563,7 +563,7 @@ export class CharacterBuilder {
 					const inst = await M2Instance.create(model, this.assets, this.lighting);
 					if (!item.attachModel(inst, ITEM_VISUAL_ATTACHMENTS[slot])) inst.dispose();
 				} catch (e) {
-					console.warn(`Failed to attach enchant visual ${path}: ${e instanceof Error ? e.message : e}`);
+					console.warn(`Failed to attach item visual ${path}: ${e instanceof Error ? e.message : e}`);
 				}
 			}),
 		);

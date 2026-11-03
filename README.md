@@ -215,7 +215,9 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   spell grants, and are skipped. A held item also carries its own `ItemDisplayInfo.ItemVisual`, which is what makes
   an item glow unenchanted; an enchant's visual replaces it, the choice `CCharacterComponent::AddHandItem` makes.
   1,633 appearances name one, 1,383 of them a row that exists. Only held items take it: a helm or shoulder shows an
-  enchant's visual and nothing else, as the client's own `AddHelm` and `AddShoulders` do.
+  enchant's visual and nothing else, as the client's own `AddHelm` and `AddShoulders` do. 877 item entries reach a
+  visual this way, across 67 of them; every effect model they name is on disk but one, visual 144's
+  `Spells\BloodBold_Missile_Low.mdx`, which is a typo for `BloodBolt` and so shows nothing in the client either.
 - Glowing eyes (geoset 1703) are turned on for the death knight class alone. The client also lights them for a
   face whose `CharSections` row carries flag 0x4, which in 3.3.5a marks the death knight face and skin colour
   combinations — face variations 12-23 plus the pale re-colours of a couple of ordinary faces, per race. Picking

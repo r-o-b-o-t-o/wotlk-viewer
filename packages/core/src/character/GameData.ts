@@ -7,6 +7,7 @@ import { CharSectionType, Gender } from "./constants.js";
 
 export interface ChrRace {
 	id: number;
+	flags: number;
 	maleDisplayId: number;
 	femaleDisplayId: number;
 	/** e.g. "Hu", used in item model file names. */
@@ -160,6 +161,7 @@ export class GameData {
 			byId(
 				d.map((i) => ({
 					id: d.uint(i, 0),
+					flags: d.uint(i, 1),
 					maleDisplayId: d.uint(i, 4),
 					femaleDisplayId: d.uint(i, 5),
 					clientPrefix: d.string(i, 6),

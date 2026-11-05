@@ -145,6 +145,14 @@ export enum GeosetGroup {
 	Belt = 18,
 }
 
+/**
+ * ChrRaces.dbc flags. Hoofed and clawed races carry `BareFeet`: the client skips the boot texture
+ * on their foot region, leaving them barefoot however they are shod.
+ */
+export const RaceFlag = {
+	BareFeet: 0x2,
+} as const;
+
 /** CharSections.dbc base sections. */
 export enum CharSectionType {
 	Skin = 0,

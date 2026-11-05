@@ -244,6 +244,16 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   one of those on a character of another class, which the demo's free appearance pickers allow and the game does
   not, leaves the eyes dark here. A helm that hides the eye glow never reaches a death knight: the client forces
   the geoset back on at draw time, after the helmet masks.
+- A robe in the chest slot or a dress in the legs slot (`ItemDisplayInfo.GeosetGroup[2]`, 530 and 118 appearances)
+  drops the boot and pant geosets outright and keeps the plain legcuff, as `CCharacterComponent::GeosRenderPrep`
+  does. Only a chest robe paints the leg regions; a chest that is not one keeps its `LegUpper`/`LegLower`
+  textures unused, where the client always applies them — it reaches 28 appearances, every one a matching pant
+  texture for a set the character would be wearing anyway. The chest flag 0x4 that suppresses the pants under any
+  chest is not honoured either: it would also have to skip the pant textures on the legs and paint the underwear
+  back in, and only 15 of the client's 57,986 appearances carry it.
+- Races whose `ChrRaces` flags carry `BareFeet` — troll, tauren, draenei and forest troll — take no item texture
+  on the foot region, so they stay barefoot whatever they are shod in. The boot geometry still shows; it is only
+  the skin under it that the client refuses to paint.
 
 - A ranged weapon is only drawn on request (`drawRanged: true`), held in the left hand and the only thing held;
   the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath

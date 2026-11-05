@@ -17,6 +17,7 @@ import {
 	InventoryType,
 	ITEM_TEXTURE_SLOTS,
 	ITEM_VISUAL_ATTACHMENTS,
+	RaceFlag,
 } from "./constants.js";
 import type { GameData, ItemDisplayInfo } from "./GameData.js";
 import { TextureCompositor } from "./TextureCompositor.js";
@@ -112,6 +113,9 @@ const SHEATH_HIDDEN = 7;
 /** ItemDisplayInfo flag carried by the one tabard the guild crest is painted onto. */
 const GUILD_TABARD_FLAG = 0x1;
 
+/** Geoset group value no geoset can carry, so the whole group goes unrendered. */
+const HIDDEN = -1;
+
 /** Body texture draw order (later slots draw on top). */
 const SLOT_ORDER = [
 	EquipmentSlot.Shirt,
@@ -186,7 +190,12 @@ export class CharacterBuilder {
 		if (app.showCloak === false) bySlot.delete(EquipmentSlot.Back);
 		if (app.showTabard === false) bySlot.delete(EquipmentSlot.Tabard);
 		const chest = bySlot.get(EquipmentSlot.Chest);
-		const hasRobe = !!chest && chest.display.geosetGroups[2] > 0;
+		const legs = bySlot.get(EquipmentSlot.Legs);
+		const feet = bySlot.get(EquipmentSlot.Feet);
+		// A robe in the chest slot, or a dress in the legs slot, hangs one skirt over the whole lower body.
+		const chestRobeGroup = chest?.display.geosetGroups[2] ?? 0;
+		const robeGroup = chestRobeGroup || legs?.display.geosetGroups[2] || 0;
+		const hasRobe = robeGroup > 0;
 
 		// --- geosets -----------------------------------------------------------
 		const groups = new Map<number, number>();
@@ -210,19 +219,10 @@ export class CharacterBuilder {
 			setGroup(GeosetGroup.Sleeves, shirt.display.geosetGroups[0]);
 			setGroup(GeosetGroup.Chest, shirt.display.geosetGroups[1]);
 		}
-		const legs = bySlot.get(EquipmentSlot.Legs);
-		if (legs) {
-			setGroup(GeosetGroup.Pants, legs.display.geosetGroups[0]);
-			setGroup(GeosetGroup.Kneepads, legs.display.geosetGroups[1]);
-			setGroup(GeosetGroup.Trousers, legs.display.geosetGroups[2]);
-		}
 		if (chest) {
 			setGroup(GeosetGroup.Sleeves, chest.display.geosetGroups[0]);
 			setGroup(GeosetGroup.Chest, chest.display.geosetGroups[1]);
-			setGroup(GeosetGroup.Trousers, chest.display.geosetGroups[2]);
 		}
-		const feet = bySlot.get(EquipmentSlot.Feet);
-		if (feet) setGroup(GeosetGroup.Boots, feet.display.geosetGroups[0]);
 		const hands = bySlot.get(EquipmentSlot.Hands);
 		if (hands) setGroup(GeosetGroup.Gloves, hands.display.geosetGroups[0]);
 		// A glove carries its own cuff, so the sleeve it covers goes away instead of poking through.
@@ -231,10 +231,28 @@ export class CharacterBuilder {
 		if (waist) setGroup(GeosetGroup.Belt, waist.display.geosetGroups[0]);
 		const back = bySlot.get(EquipmentSlot.Back);
 		if (back) setGroup(GeosetGroup.Cloak, back.display.geosetGroups[0]);
-		if (bySlot.has(EquipmentSlot.Tabard) && !hasRobe) groups.set(GeosetGroup.Tabard, 2);
 		if (hasRobe) {
-			// Robes replace the trouser geoset and cover kneepads/boot tops.
+			// The skirt reaches the floor, so boots and legs go away entirely rather than poking through
+			// it; only the plain legcuff stays, under the hem.
+			groups.set(GeosetGroup.Boots, HIDDEN);
+			groups.set(GeosetGroup.Pants, HIDDEN);
 			groups.set(GeosetGroup.Kneepads, 1);
+			setGroup(GeosetGroup.Trousers, robeGroup);
+		} else {
+			// Boots carry their own cuff; without them the trousers' own cuff shows.
+			if (feet?.display.geosetGroups[0]) setGroup(GeosetGroup.Boots, feet.display.geosetGroups[0]);
+			else setGroup(GeosetGroup.Kneepads, legs?.display.geosetGroups[1] ?? 0);
+			const tabardGroup = bySlot.get(EquipmentSlot.Tabard)?.display.geosetGroups[0] ?? 0;
+			if (tabardGroup) setGroup(GeosetGroup.Tabard, tabardGroup);
+			// Long trousers (group above 2) take the trouser geoset's place and show whatever else is on;
+			// the short ones give way to a tabard.
+			const pantsGroup = legs?.display.geosetGroups[0] ?? 0;
+			if (pantsGroup > 2) {
+				groups.set(GeosetGroup.Trousers, HIDDEN);
+				setGroup(GeosetGroup.Pants, pantsGroup);
+			} else if (!tabardGroup) {
+				setGroup(GeosetGroup.Pants, pantsGroup);
+			}
 		}
 
 		// Helmets hide hair / facial geosets per race.
@@ -294,6 +312,7 @@ export class CharacterBuilder {
 		push(underwearSec?.textures[1], CharRegion.TorsoUpper);
 
 		const genderSuffix = sex === 1 ? "F" : "M";
+		const barefoot = (raceRec.flags & RaceFlag.BareFeet) !== 0;
 		const tabard = bySlot.get(EquipmentSlot.Tabard);
 		// The guild tabard ships a blank white texture; the crest takes its place.
 		const guildLayers =
@@ -306,8 +325,10 @@ export class CharacterBuilder {
 				if (!item) return [];
 				if (slot === EquipmentSlot.Tabard && guildLayers) return guildLayers.map((l) => Promise.resolve(l));
 				// ItemDisplayInfo carries textures for the whole armor set; only the slot's own regions apply.
-				const allowed = [...(SLOT_TEXTURE_REGIONS[slot] ?? [])];
-				if (slot === EquipmentSlot.Chest && hasRobe) allowed.push(5, 6);
+				let allowed = [...(SLOT_TEXTURE_REGIONS[slot] ?? [])];
+				if (slot === EquipmentSlot.Chest && chestRobeGroup) allowed.push(5, 6);
+				// Hooves and claws are never shod: the foot region keeps the skin it was born with.
+				if (barefoot) allowed = allowed.filter((i) => ITEM_TEXTURE_SLOTS[i].region !== CharRegion.Foot);
 				return ITEM_TEXTURE_SLOTS.flatMap(({ folder, region }, i) => {
 					const name = allowed.includes(i) ? item.display.textures[i] : "";
 					return name

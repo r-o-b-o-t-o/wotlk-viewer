@@ -4,6 +4,7 @@ import {
 	AssetManager,
 	BACKDROP_CHARACTER_ATTACHMENT,
 	BACKDROP_PET_ATTACHMENT,
+	drawsRangedWeapon,
 	EquipmentSlot,
 	GameData,
 	HttpDataSource,
@@ -135,6 +136,8 @@ export function App(): JSX.Element {
 			// The character's own choice to hide either piece, as the game stores it.
 			showHelm: !c.hideHelm,
 			showCloak: !c.hideCloak,
+			// A hunter stands there holding its bow, every other class its melee weapons.
+			drawRanged: drawsRangedWeapon(c.class),
 			items: characterItems(c, transmog),
 		});
 

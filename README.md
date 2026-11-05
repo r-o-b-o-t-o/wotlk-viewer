@@ -248,7 +248,13 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - A ranged weapon is only drawn on request (`drawRanged: true`), held in the left hand and the only thing held;
   the game never shows one while it is put away. `sheathed: true` moves main/off-hand weapons to the sheath
   attachments derived from `Item.dbc` `SheatheType`, and held off-hand items disappear, like in the game.
-  Combining both gives the ranged stance: bow in hand, melee gear stowed.
+  Combining both gives the ranged stance: bow in hand, melee gear stowed. Which of the two a character-selection
+  screen shows is decided by class alone — `ShowCharacter` skips both hand slots for a hunter and the ranged slot
+  for everyone else, so `drawsRangedWeapon(classId)` is what the demo sets `drawRanged` from when a character is
+  loaded. Nothing is ever sheathed there: the client adds every weapon with `SHEATHE_NONE`.
+- A bow's string is not drawn stretched. The client hangs `CDrawBowString::GlueDrawBowStringCB` off a ranged
+  weapon whose model carries the `$TWT` and `$TWB` events, and only for `INVTYPE_RANGED` — bows and crossbows,
+  not the guns and wands of `INVTYPE_RANGEDRIGHT`.
 - Translucent batches of one model are drawn in `priorityPlane` order, additive glow decals last within a plane and
   file order under that, instead of being depth-sorted per submesh: every batch of a mesh shares one sort key in
   three.js. That covers the glue backdrops, which lean on the planes heavily, and about one model in twenty sets

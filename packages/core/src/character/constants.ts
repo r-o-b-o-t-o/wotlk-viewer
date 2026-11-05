@@ -6,6 +6,18 @@ export enum Gender {
 /** ChrClasses id of the one class the renderer treats specially: eye glow, and its own backdrop. */
 export const DEATH_KNIGHT_CLASS = 6;
 
+/** ChrClasses id of the hunter, the one class the glue screens show holding its ranged weapon. */
+export const HUNTER_CLASS = 3;
+
+/**
+ * Whether the character-selection screen draws a character's ranged weapon in place of its melee
+ * ones. `ShowCharacter` skips both hand slots for a hunter and the ranged slot for everyone else,
+ * so a hunter is the only one who stands there holding a bow, and never beside a sword.
+ */
+export function drawsRangedWeapon(classId: number | undefined): boolean {
+	return classId === HUNTER_CLASS;
+}
+
 /** Character equipment slots (same numbering as the server / `character_inventory.slot`). */
 export enum EquipmentSlot {
 	Head = 0,

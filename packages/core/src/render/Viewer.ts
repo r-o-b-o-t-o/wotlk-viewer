@@ -466,7 +466,13 @@ export class Viewer {
 	frame(padding = 1.3): void {
 		if (this.instances.length === 0) return;
 		this.camera.updateMatrixWorld();
-		this.scene.updateMatrixWorld(true);
+		// An instance standing on a backdrop has its matrix written for it every frame, and this camera
+		// only comes back into use once the backdrop is gone. So frame the place it goes then: its own
+		// transform, which `updateMatrix` composes and the next frame overwrites again.
+		for (const inst of this.instances) if (this.backdropAttachments.has(inst)) inst.updateMatrix();
+		// `root`, not a scene: a fixed camera parents it under the backdrop's scene instead (see
+		// `syncPlacement`), and the instances' world matrices hang off it either way.
+		this.root.updateMatrixWorld(true);
 		// Attached models only get their matrix inside update(), which may not have run yet.
 		for (const inst of this.instances) inst.update(0, this.camera);
 		const box = new Box3();

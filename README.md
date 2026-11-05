@@ -321,11 +321,16 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   is one object, as is each model, so translucent surfaces of a scene and a model that overlap can still stack
   wrongly. Under the orbit camera the backdrop stays a pass of its own with the depth buffer cleared after it, and
   the models draw on top of all of it.
-- The models keep the viewer's own lighting either way, where the glue screen lights the character and its pet with
-  the same `RaceLights` rows it lights the scene with (`AddCharacterLight` and `AddPetLight` in `GlueParent.lua`
-  take the same values as `AddLight`), and lights a dead one from `LightParams` row 3 instead. Fog reaches the
-  scene alone in the client too, the character and pet being lit from light sets that carry none. The ground shadow
-  under the character is not drawn.
+- Under `staticCamera` the models are lit by the backdrop's own light set, as the glue screen lights them:
+  `AddCharacterLight` and `AddPetLight` in `GlueParent.lua` are handed the same `RaceLights` rows as the scene
+  itself, and the client lends every model in the scene its nearest point lights — `CM2Model::SetupLighting` calls
+  `SelectLights` before the glue callback, whose `Reset()` clears the directional terms the scene set replaces and
+  leaves the point lights alone. So the moonwell lights a night elf and the crypt braziers an undead, and a scene
+  whose only row is a dim ambient leaves its character dim. Fog is not passed on, which is the client's doing too:
+  only the background model is given any. Left out are the ghost lighting a dead character takes from `LightParams`
+  row 3, and the ground shadow under the character. The four point lights are the first the backdrop carries rather
+  than the four nearest the model, which only a scene with more than four could tell apart. Off a backdrop, and
+  under the orbit camera, the models go back to the viewer's own ambient and single directional.
 - `staticCamera` reproduces the character-selection view: the scene's camera, its attachment points, a facing of
   0.6° per pixel dragged, and the bone animation the scene turns and scales its attachment points with, all as the
   client does them. What it leaves out is the rest of that screen — the rotate buttons, the glue frame's fade, and

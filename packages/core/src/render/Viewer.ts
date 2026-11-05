@@ -14,7 +14,7 @@ import {
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { M2LightType } from "../formats/m2.js";
-import { M2_MAX_LIGHTS, M2_MAX_POINT_LIGHTS, type M2Lighting } from "./M2Material.js";
+import { M2_MAX_LIGHTS, M2_MAX_POINT_LIGHTS, type M2DirectionalLight, type M2Lighting } from "./M2Material.js";
 import type { M2Instance } from "./M2Instance.js";
 
 export interface ViewerOptions {
@@ -60,6 +60,11 @@ const FACING_PER_PIXEL = 0.6;
 const tmpOffset = new Vector3();
 const tmpEye = new Vector3();
 const tmpTarget = new Vector3();
+/** The viewer's own light set, copied into the models' lighting whenever no backdrop lights them. */
+const DEFAULT_AMBIENT = new Vector3(0.55, 0.55, 0.55);
+const DEFAULT_LIGHTS: M2DirectionalLight[] = [
+	{ color: new Vector3(0.7, 0.7, 0.7), direction: new Vector3(0.3, 0.6, 0.75).normalize() },
+];
 const tmpMatrix = new Matrix4();
 const tmpAttachment = new Matrix4();
 const tmpLocal = new Matrix4();
@@ -90,10 +95,18 @@ export class Viewer {
 	 * pet and its weapons.
 	 */
 	pivot: M2Instance | null = null;
+	/**
+	 * Lighting of the models. Every slot is allocated up front, black where unused: a material binds
+	 * these vectors once, so a light set swapped in later (see `staticCamera`) has to land in them.
+	 */
 	readonly lighting: M2Lighting = {
-		ambient: new Vector3(0.55, 0.55, 0.55),
-		lights: [{ color: new Vector3(0.7, 0.7, 0.7), direction: new Vector3(0.3, 0.6, 0.75).normalize() }],
-		points: [],
+		ambient: DEFAULT_AMBIENT.clone(),
+		lights: Array.from({ length: M2_MAX_LIGHTS }, (_, i) => ({
+			color: DEFAULT_LIGHTS[i]?.color.clone() ?? new Vector3(),
+			// An unused slot still needs a real direction, since the shader normalizes none of them.
+			direction: DEFAULT_LIGHTS[i]?.direction.clone() ?? new Vector3(0, 0, 1),
+		})),
+		points: Array.from({ length: M2_MAX_POINT_LIGHTS }, () => ({ color: new Vector3(), position: new Vector3() })),
 		fog: new Vector4(0, 0, 0, 0), // a bare Vector4 has w = 1, which would fog the scene solid
 	};
 	/** Scene holding the backdrop, drawn before `scene` through `backdropCamera`. */
@@ -183,12 +196,9 @@ export class Viewer {
 	set staticCamera(on: boolean) {
 		if (on === this.fixedCamera) return;
 		this.fixedCamera = on;
-		this.controls.enabled = !on;
 		this.pendingZoom = 0;
 		this.facing = 0;
-		this.updateModelScene();
-		// Placement is written straight into the matrices while fixed; let three.js have them back.
-		for (const inst of this.instances) inst.matrixAutoUpdate = !(on && this.backdropAttachments.has(inst));
+		this.syncPlacement();
 	}
 
 	/**
@@ -199,7 +209,7 @@ export class Viewer {
 	setBackdropAttachment(instance: M2Instance, attachmentId: number | null): void {
 		if (attachmentId === null) this.backdropAttachments.delete(instance);
 		else this.backdropAttachments.set(instance, attachmentId);
-		instance.matrixAutoUpdate = !(this.fixedCamera && attachmentId !== null);
+		this.syncPlacement();
 	}
 
 	/**
@@ -293,11 +303,11 @@ export class Viewer {
 	setBackdrop(instance: M2Instance | null, lighting?: BackdropLighting): void {
 		if (this.backdrop) this.backdropRoot.remove(this.backdrop);
 		this.backdrop = null;
-		if (!instance) return this.updateModelScene();
+		if (!instance) return this.syncPlacement();
 		const cam = instance.model.m2.cameras[0];
 		if (!cam) {
 			console.warn(`Backdrop ${instance.model.path} carries no camera, so there is no view to show it from.`);
-			return this.updateModelScene();
+			return this.syncPlacement();
 		}
 		this.backdrop = instance;
 		this.backdropRoot.add(instance);
@@ -311,16 +321,49 @@ export class Viewer {
 		this.backdropCamera.matrixWorldInverse.copy(this.backdropCamera.matrixWorld).invert();
 		this.updateBackdropProjection();
 		this.applyBackdropLighting(lighting);
-		this.updateModelScene();
+		this.syncPlacement();
+	}
+
+	/** Whether a backdrop is the one standing, lighting and looking at the models (see `staticCamera`). */
+	private get onBackdrop(): boolean {
+		return this.fixedCamera && this.backdrop !== null;
 	}
 
 	/**
-	 * Keeps the models in the scene they belong in: the backdrop's own while the camera is fixed, so
-	 * that one pass sorts them against its batches, and their own scene the rest of the time.
+	 * Hands the models over to the backdrop, or takes them back: its scene, so that one pass sorts
+	 * them against its batches, its light set, and its attachment points, whose matrices
+	 * `placeOnBackdrop` writes in place of three.js. `staticCamera` set while a scene is still
+	 * loading changes nothing until it arrives, so one that never does leaves the controls alone.
 	 */
-	private updateModelScene(): void {
-		const scene = this.fixedCamera && this.backdrop ? this.backdropScene : this.scene;
+	private syncPlacement(): void {
+		const on = this.onBackdrop;
+		this.controls.enabled = !on;
+		for (const inst of this.instances) inst.matrixAutoUpdate = !(on && this.backdropAttachments.has(inst));
+		const scene = on ? this.backdropScene : this.scene;
 		if (this.root.parent !== scene) scene.add(this.root);
+		this.applyModelLighting();
+	}
+
+	/**
+	 * Lights the models with the backdrop's own light set while they stand in its scene, which is what
+	 * the glue screen does: `AddCharacterLight` and `AddPetLight` take the same `RaceLights` rows as
+	 * the scene itself. Its fog stays out, which is the client's doing too — only the background model
+	 * is given any. Off a backdrop the models go back to the viewer's own light set.
+	 */
+	private applyModelLighting(): void {
+		const scene = this.onBackdrop ? this.backdropLighting : null;
+		this.lighting.ambient.copy(scene ? scene.ambient : DEFAULT_AMBIENT);
+		this.lighting.lights.forEach((slot, i) => {
+			const light = (scene ? scene.lights : DEFAULT_LIGHTS)[i];
+			if (!light) {
+				slot.color.setScalar(0);
+				return;
+			}
+			slot.color.copy(light.color);
+			slot.direction.copy(light.direction);
+		});
+		// The scene's point lights are copied in per frame; off a backdrop there are none.
+		if (!scene) for (const point of this.lighting.points) point.color.setScalar(0);
 	}
 
 	/** Turns a backdrop's light set into the view-space one its materials already read. */
@@ -366,6 +409,15 @@ export class Viewer {
 				.applyMatrix4(this.backdropCamera.matrixWorldInverse);
 		}
 		for (; n < slots.length; n++) slots[n].color.setScalar(0);
+		// The client gathers the scene's point lights for every model in it, the character included:
+		// its glue callback resets the directional terms the scene light set replaces and leaves these
+		// alone. So a moonwell or a brazier lights whoever stands by it.
+		if (this.onBackdrop) {
+			this.lighting.points.forEach((slot, i) => {
+				slot.color.copy(slots[i].color);
+				slot.position.copy(slots[i].position);
+			});
+		}
 	}
 
 	/**
@@ -384,6 +436,8 @@ export class Viewer {
 			instance.matrix
 				.multiplyMatrices(tmpMatrix, attachment)
 				.multiply(tmpLocal.compose(ORIGIN, tmpQuat.setFromAxisAngle(tmpZ, facing), instance.scale));
+			// The traversal that would carry this down has already run this frame.
+			instance.updateMatrixWorld(true);
 		}
 	}
 
@@ -462,7 +516,7 @@ export class Viewer {
 
 	/** Renders one frame, advancing animations by `dtMs`. */
 	render(dtMs = 0): void {
-		const fixed = this.fixedCamera && this.backdrop !== null;
+		const fixed = this.onBackdrop;
 		if (!fixed) {
 			this.applyZoom();
 			this.controls.update();
@@ -478,8 +532,10 @@ export class Viewer {
 		this.backdrop.update(dtMs * this.timeScale, this.backdropCamera);
 		this.updateBackdropPointLights();
 		const camera = fixed ? this.backdropCamera : this.camera;
-		if (fixed) this.placeOnBackdrop();
+		// Before `placeOnBackdrop`, which reads the root's world matrix and refreshes the instances it
+		// moves; everything else takes its own from here.
 		this.root.updateMatrixWorld(true);
+		if (fixed) this.placeOnBackdrop();
 		for (const inst of this.instances) inst.update(dtMs * this.timeScale, camera);
 		// Fixed: the models stand in the backdrop's own scene, so one pass draws the lot and three.js
 		// depth-tests and sorts them against its batches, as the client's single scene does. A

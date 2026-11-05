@@ -313,6 +313,11 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   `attenuation_end` go unread, and only its diffuse side is used, every light in the client with an ambient term
   being a backdrop's directional one. `Viewer` sets `outputColorSpace = LinearSRGBColorSpace` because shading is
   done in gamma space; mixing in standard three.js materials needs color-management care.
+- Lighting is worked out per vertex and clamped to 1 there, as the client's is: it lights a vertex and hands the
+  result down as a vertex colour, which the hardware clamps before interpolating. Both halves show next to a close
+  light — the undead scene hangs a dim fill light inside the character's chest, which per pixel and unclamped
+  burns a spotlight into the torso where the game lights the whole body evenly. A normal map or a specular
+  highlight would need the per-pixel form back; nothing here has either.
 - Under `staticCamera` the models are drawn inside the backdrop's own scene, in a single pass, so three.js
   depth-tests and sorts them against its batches the way the client's one scene does: scenery covers a model that
   stands behind it, and a translucent banner in front of one hangs in front of it — a translucent batch writes no

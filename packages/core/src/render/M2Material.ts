@@ -90,7 +90,10 @@ export const LIGHTING_DEFINES = {
 
 /**
  * The scene lighting a shader multiplies its colour by, as `m2Light(normal, viewPos)` over view-space
- * arguments. Shared with the particle shader, which calls it per vertex as the client does.
+ * arguments. Called per vertex, as the client lights everything: its result is a vertex colour, which
+ * the hardware clamps to 0..1 before interpolating it, so `m2Light` clamps too. Both matter next to a
+ * light standing close by — one scene hangs a dim fill light inside the character's chest, which
+ * unclamped and read per pixel burns a spotlight into the torso instead of lighting the whole body.
  */
 export const LIGHTING_GLSL = /* glsl */ `
 uniform vec3 uAmbient;
@@ -109,7 +112,7 @@ vec3 m2Light(vec3 n, vec3 viewPos) {
     float atten = 1.0 / (0.7 * dist + 0.03 * dist * dist);
     light += uPointColor[i] * atten * max(dot(n, toLight / dist), 0.0);
   }
-  return light;
+  return min(light, vec3(1.0));
 }
 `;
 
@@ -164,14 +167,17 @@ export function fogUniforms(lighting: M2Lighting, mode: number): Record<string, 
 const VERTEX = /* glsl */ `
 #include <common>
 #include <skinning_pars_vertex>
+${LIGHTING_GLSL}
 uniform mat4 uTexMat0;
 uniform mat4 uTexMat1;
 uniform int uTexCoord0;
 uniform int uTexCoord1;
 varying vec2 vUv0;
 varying vec2 vUv1;
-varying vec3 vNormal;
 varying vec3 vViewPos;
+// Both faces lit here, since a vertex does not know which way the triangle it lands on will face.
+varying vec3 vLightFront;
+varying vec3 vLightBack;
 
 vec2 texCoord(int src, vec3 n) {
   if (src == 2) return vec2(n.x * 0.5 + 0.5, 0.5 - n.y * 0.5);
@@ -190,9 +196,11 @@ void main() {
   #include <skinning_vertex>
   #include <project_vertex>
   vViewPos = mvPosition.xyz;
-  vNormal = normalize(transformedNormal);
-  vUv0 = (uTexMat0 * vec4(texCoord(uTexCoord0, vNormal), 0.0, 1.0)).xy;
-  vUv1 = (uTexMat1 * vec4(texCoord(uTexCoord1, vNormal), 0.0, 1.0)).xy;
+  vec3 n = normalize(transformedNormal);
+  vLightFront = m2Light(n, vViewPos);
+  vLightBack = m2Light(-n, vViewPos);
+  vUv0 = (uTexMat0 * vec4(texCoord(uTexCoord0, n), 0.0, 1.0)).xy;
+  vUv1 = (uTexMat1 * vec4(texCoord(uTexCoord1, n), 0.0, 1.0)).xy;
 }
 `;
 
@@ -205,12 +213,12 @@ uniform int uCombiner;
 uniform float uAlphaTest;
 uniform bool uOpaque;
 uniform bool uUnlit;
-${LIGHTING_GLSL}
 ${FOG_GLSL}
 varying vec2 vUv0;
 varying vec2 vUv1;
-varying vec3 vNormal;
 varying vec3 vViewPos;
+varying vec3 vLightFront;
+varying vec3 vLightBack;
 
 void main() {
   // A batch whose own alpha has faded away never reaches the client's draw list at all. The alpha
@@ -236,7 +244,7 @@ void main() {
     }
   }
   if (a < uAlphaTest) discard;
-  if (!uUnlit) rgb *= m2Light(normalize(gl_FrontFacing ? vNormal : -vNormal), vViewPos);
+  if (!uUnlit) rgb *= gl_FrontFacing ? vLightFront : vLightBack;
   rgb = m2Fog(rgb, vViewPos.z);
   gl_FragColor = vec4(rgb, a);
 }

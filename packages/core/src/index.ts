@@ -26,7 +26,13 @@ export {
 } from "./render/M2Material.js";
 export { M2Instance, type PlayOptions } from "./render/M2Instance.js";
 export { ParticleSystem, type EmitterFrames } from "./render/ParticleSystem.js";
-export { Viewer, type BackdropLighting, type ViewerOptions } from "./render/Viewer.js";
+export {
+	BACKDROP_CHARACTER_ATTACHMENT,
+	BACKDROP_PET_ATTACHMENT,
+	Viewer,
+	type BackdropLighting,
+	type ViewerOptions,
+} from "./render/Viewer.js";
 export { blpToTexture, canvasToTexture, createWhiteTexture, type TextureOptions } from "./render/textures.js";
 export * from "./character/constants.js";
 export { GameData } from "./character/GameData.js";

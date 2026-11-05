@@ -82,6 +82,18 @@ const backdrop = await new BackdropBuilder(assets, gameData, viewer.backdropLigh
 if (backdrop) viewer.setBackdrop(backdrop.instance, backdrop.lighting);
 ```
 
+`viewer.staticCamera = true` then shows the models through that same camera, which is how the character-selection
+screen looks: the camera never moves, a left-drag turns the character (`viewer.facing`, 0.6° per pixel as the glue
+screens rotate it) instead of orbiting, and the wheel does nothing. The models stand on the scene's own attachment
+points rather than at their `position`, `BACKDROP_CHARACTER_ATTACHMENT` for the character and
+`BACKDROP_PET_ATTACHMENT` for its pet, the way the client attaches them:
+
+```ts
+viewer.staticCamera = true;
+viewer.setBackdropAttachment(character, BACKDROP_CHARACTER_ATTACHMENT);
+viewer.setBackdropAttachment(pet, BACKDROP_PET_ATTACHMENT);
+```
+
 `Viewer` is a convenience (renderer, orbit camera, backdrop pass, resize handling, render loop). `viewer.pivot` names the instance
 `frame()` fits and the camera orbits, its own body alone: the same character is framed the same way whatever it has
 equipped and whatever stands next to it, and a pet or a polearm may start partly out of frame rather than push the
@@ -110,7 +122,15 @@ camera on the character rather than on the pair:
 <Creature assets={assets} displayId={character.pet.displayId} pet={character.pet} position={petPosition} />
 ```
 
-`<Backdrop assets race={1} classId={6} />` puts a character's character-creation scene behind everything.
+`<Backdrop assets race={1} classId={6} />` puts a character's character-creation scene behind everything, shown
+through its own camera as the character-selection screen does — pass `staticCamera={false}` to keep orbiting
+instead. Models take `backdropAttachment` to say where that scene stands them:
+
+```tsx
+<Backdrop assets={assets} race={appearance.race} classId={appearance.classId} />
+<Character assets={assets} appearance={appearance} pivot backdropAttachment={BACKDROP_CHARACTER_ATTACHMENT} />
+<Creature assets={assets} displayId={pet.displayId} pet={pet} backdropAttachment={BACKDROP_PET_ATTACHMENT} />
+```
 
 `useViewer()` gives children the `Viewer`. For other frameworks, `mountInstance(viewer, load, opts)`
 from the core package holds the same lifecycle (load, cancel, add, frame, dispose) behind one disposer, and
@@ -294,9 +314,14 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   being a backdrop's directional one. `Viewer` sets `outputColorSpace = LinearSRGBColorSpace` because shading is
   done in gamma space; mixing in standard three.js materials needs color-management care.
 - A backdrop is a second render pass with the depth buffer cleared after it, so the character is drawn on top of the
-  whole scene and framed by `frame()` — where the client puts it inside the scene, at the point its camera looks at,
-  with foreground props able to cover it and a shadow on the ground. Nothing else about the two passes is shared:
-  the models keep the viewer's own lighting and stay unfogged.
+  whole scene — where the client puts it inside one scene, with foreground props able to cover it and a shadow on
+  the ground. Nothing else about the two passes is shared: the models keep the viewer's own lighting and stay
+  unfogged, where the client lights a character and its pet from light sets of their own.
+- `staticCamera` reproduces the character-selection view: the scene's camera, its attachment points, a facing of
+  0.6° per pixel dragged, and the bone animation the scene turns and scales its attachment points with, all as the
+  client does them. What it leaves out is the rest of that screen — the rotate buttons, the glue frame's fade, and
+  the death-knight ghost lighting — and the models still draw over the scene rather than inside it. A model's own
+  `position` is ignored while it stands on an attachment, since the client gives it a rotation and a scale only.
 - A backdrop is lit from two places, as the glue screen lights it: its scene light set and fog are the `RaceLights`
   and `CharModelFogInfo` tables in the client's `Interface\GlueXML\GlueParent.lua`, and its moonwells, torches and
   braziers are the point lights inside the model itself, which follow their bones and flicker on their global

@@ -4,7 +4,9 @@ import {
 	Group,
 	LinearSRGBColorSpace,
 	MathUtils,
+	Matrix4,
 	PerspectiveCamera,
+	Quaternion,
 	Scene,
 	Vector3,
 	Vector4,
@@ -34,6 +36,13 @@ export interface BackdropLighting {
 	fog?: { color: [number, number, number]; end: number };
 }
 
+/**
+ * The attachment points a glue-screen backdrop carries, as the client's character-selection and
+ * character-creation screens use them: the character stands on the first, its pet on the second.
+ */
+export const BACKDROP_CHARACTER_ATTACHMENT = 0;
+export const BACKDROP_PET_ATTACHMENT = 1;
+
 /** Share of the pending zoom spent per frame; OrbitControls damps rotation and panning the same way. */
 const ZOOM_DAMPING = 0.08;
 /** Pending zoom below this is not worth another frame of easing. */
@@ -43,9 +52,20 @@ const MIN_BACKDROP_ASPECT = 4 / 3;
 /** Log-distance change per wheel notch and per pixel of ctrl-drag. */
 const WHEEL_ZOOM_SPEED = 0.0015;
 const DRAG_ZOOM_SPEED = 0.006;
+/**
+ * Degrees a character turns per pixel of drag, as `CHARACTER_ROTATION_CONSTANT` in the client's
+ * `Interface\GlueXML\CharacterSelect.lua`.
+ */
+const FACING_PER_PIXEL = 0.6;
 const tmpOffset = new Vector3();
 const tmpEye = new Vector3();
 const tmpTarget = new Vector3();
+const tmpMatrix = new Matrix4();
+const tmpAttachment = new Matrix4();
+const tmpLocal = new Matrix4();
+const tmpQuat = new Quaternion();
+const tmpZ = new Vector3(0, 0, 1);
+const ORIGIN = new Vector3();
 
 /** Turns a point or direction in WoW's Z-up space into the scene's Y-up one, as `root` does. */
 function zUpToScene(v: [number, number, number] | ArrayLike<number>, out: Vector3): Vector3 {
@@ -89,10 +109,15 @@ export class Viewer {
 	};
 	/** Animation speed multiplier; 0 pauses. */
 	timeScale = 1;
+	/** How far the character has been turned, in radians about its own up axis. */
+	facing = 0;
 
 	/** Z-up parent for the backdrop, matching `root`. */
 	private readonly backdropRoot = new Group();
 	private backdrop: M2Instance | null = null;
+	/** Backdrop attachment each instance stands at while the camera is fixed (see `staticCamera`). */
+	private readonly backdropAttachments = new Map<M2Instance, number>();
+	private fixedCamera = false;
 	/** The backdrop camera's diagonal field of view; `resize` derives a vertical one from it. */
 	private backdropFov = 0;
 	private raf = 0;
@@ -124,6 +149,7 @@ export class Viewer {
 		this.camera = new PerspectiveCamera(45, 1, 0.05, 500);
 		this.camera.position.set(4, 1.5, 0);
 		this.bindZoom(canvas);
+		this.bindFacing(canvas);
 		this.controls = new OrbitControls(this.camera, canvas);
 		this.controls.target.set(0, 1, 0);
 		this.controls.enableDamping = true;
@@ -146,6 +172,36 @@ export class Viewer {
 	}
 
 	/**
+	 * Shows the models through the backdrop's own camera, standing where its scene stands them, the
+	 * way the character-selection screen does: the camera never moves, and a left-drag turns the
+	 * character instead of orbiting it. Ignored until a backdrop is set (see `setBackdrop`).
+	 */
+	get staticCamera(): boolean {
+		return this.fixedCamera;
+	}
+
+	set staticCamera(on: boolean) {
+		if (on === this.fixedCamera) return;
+		this.fixedCamera = on;
+		this.controls.enabled = !on;
+		this.pendingZoom = 0;
+		this.facing = 0;
+		// Placement is written straight into the matrices while fixed; let three.js have them back.
+		for (const inst of this.instances) inst.matrixAutoUpdate = !(on && this.backdropAttachments.has(inst));
+	}
+
+	/**
+	 * Which of the backdrop's attachment points an instance stands at while `staticCamera` is on —
+	 * `BACKDROP_CHARACTER_ATTACHMENT` for the character, `BACKDROP_PET_ATTACHMENT` for its pet. Its
+	 * own `position` is then ignored, as the client ignores it; pass null to place it freely again.
+	 */
+	setBackdropAttachment(instance: M2Instance, attachmentId: number | null): void {
+		if (attachmentId === null) this.backdropAttachments.delete(instance);
+		else this.backdropAttachments.set(instance, attachmentId);
+		instance.matrixAutoUpdate = !(this.fixedCamera && attachmentId !== null);
+	}
+
+	/**
 	 * Wheel and ctrl + vertical drag feed `pendingZoom`, which `render()` eases out.
 	 * Must be bound before OrbitControls so the ctrl-drag can be swallowed: OrbitControls treats
 	 * every modifier as "pan", and listeners on the same element run in registration order.
@@ -154,7 +210,7 @@ export class Viewer {
 		let dragging = false;
 		let lastY = 0;
 		canvas.addEventListener("pointerdown", (e) => {
-			if (e.button !== 0 || !e.ctrlKey) return;
+			if (e.button !== 0 || !e.ctrlKey || this.fixedCamera) return;
 			e.stopImmediatePropagation();
 			dragging = true;
 			lastY = e.clientY;
@@ -172,10 +228,34 @@ export class Viewer {
 			"wheel",
 			(e) => {
 				e.preventDefault();
-				this.pendingZoom += e.deltaY * WHEEL_ZOOM_SPEED;
+				if (!this.fixedCamera) this.pendingZoom += e.deltaY * WHEEL_ZOOM_SPEED;
 			},
 			{ passive: false },
 		);
+	}
+
+	/**
+	 * Left-drag turns the character while the camera is fixed, at the glue screens' own rate of 0.6°
+	 * per pixel — half a turn across 300 of them. OrbitControls is disabled in that mode, so both can
+	 * watch the same button.
+	 */
+	private bindFacing(canvas: HTMLCanvasElement): void {
+		let dragging = false;
+		let lastX = 0;
+		canvas.addEventListener("pointerdown", (e) => {
+			if (e.button !== 0 || !this.fixedCamera) return;
+			dragging = true;
+			lastX = e.clientX;
+			canvas.setPointerCapture(e.pointerId);
+		});
+		canvas.addEventListener("pointermove", (e) => {
+			if (!dragging) return;
+			this.facing += MathUtils.degToRad((e.clientX - lastX) * FACING_PER_PIXEL);
+			lastX = e.clientX;
+		});
+		const stop = () => (dragging = false);
+		canvas.addEventListener("pointerup", stop);
+		canvas.addEventListener("pointercancel", stop);
 	}
 
 	/** Spends part of the pending zoom; OrbitControls picks the new distance up and clamps it. */
@@ -199,6 +279,8 @@ export class Viewer {
 		const i = this.instances.indexOf(instance);
 		if (i >= 0) this.instances.splice(i, 1);
 		if (this.pivot === instance) this.pivot = null;
+		this.backdropAttachments.delete(instance);
+		instance.matrixAutoUpdate = true;
 		this.root.remove(instance);
 	}
 
@@ -273,6 +355,25 @@ export class Viewer {
 				.applyMatrix4(this.backdropCamera.matrixWorldInverse);
 		}
 		for (; n < slots.length; n++) slots[n].color.setScalar(0);
+	}
+
+	/**
+	 * Stands each instance that has a backdrop attachment on that point of the scene, the character
+	 * turned by `facing`. The client does the same by attaching the models to the backdrop and giving
+	 * them a world transform of rotation and scale alone, so an instance's own position is dropped.
+	 */
+	private placeOnBackdrop(): void {
+		const backdrop = this.backdrop!;
+		tmpMatrix.copy(this.root.matrixWorld).invert().multiply(backdrop.matrixWorld);
+		for (const [instance, attachmentId] of this.backdropAttachments) {
+			if (instance.parent !== this.root) continue;
+			const attachment = backdrop.attachmentMatrix(attachmentId, tmpAttachment);
+			if (!attachment) continue;
+			const facing = attachmentId === BACKDROP_CHARACTER_ATTACHMENT ? this.facing : 0;
+			instance.matrix
+				.multiplyMatrices(tmpMatrix, attachment)
+				.multiply(tmpLocal.compose(ORIGIN, tmpQuat.setFromAxisAngle(tmpZ, facing), instance.scale));
+		}
 	}
 
 	/** The client reads a camera's diagonal FOV as a vertical one for the aspect it is drawn at. */
@@ -350,22 +451,32 @@ export class Viewer {
 
 	/** Renders one frame, advancing animations by `dtMs`. */
 	render(dtMs = 0): void {
-		this.applyZoom();
-		this.controls.update();
+		const fixed = this.fixedCamera && this.backdrop !== null;
+		if (!fixed) {
+			this.applyZoom();
+			this.controls.update();
+		}
 		this.camera.updateMatrixWorld();
-		this.root.updateMatrixWorld(true);
-		for (const inst of this.instances) inst.update(dtMs * this.timeScale, this.camera);
-		if (!this.backdrop) return this.renderer.render(this.scene, this.camera);
+		if (!this.backdrop) {
+			this.root.updateMatrixWorld(true);
+			for (const inst of this.instances) inst.update(dtMs * this.timeScale, this.camera);
+			return this.renderer.render(this.scene, this.camera);
+		}
+		// The backdrop first: the models stand on its attachment points, which its bones carry.
 		this.backdropRoot.updateMatrixWorld(true);
 		this.backdrop.update(dtMs * this.timeScale, this.backdropCamera);
 		this.updateBackdropPointLights();
+		const camera = fixed ? this.backdropCamera : this.camera;
+		if (fixed) this.placeOnBackdrop();
+		this.root.updateMatrixWorld(true);
+		for (const inst of this.instances) inst.update(dtMs * this.timeScale, camera);
 		// Two passes with the depth buffer cleared between them: the backdrop keeps the depths its own
 		// scene was built at, and the models always draw in front of all of it.
 		this.renderer.autoClear = false;
 		this.renderer.clear();
 		this.renderer.render(this.backdropScene, this.backdropCamera);
 		this.renderer.clearDepth();
-		this.renderer.render(this.scene, this.camera);
+		this.renderer.render(this.scene, camera);
 		this.renderer.autoClear = true;
 	}
 

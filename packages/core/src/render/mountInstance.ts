@@ -19,6 +19,8 @@ export interface MountOptions {
 	autoFrame?: boolean;
 	/** Make this instance the one the camera frames and orbits on, body alone (see `Viewer.pivot`). */
 	pivot?: boolean;
+	/** Backdrop attachment this instance stands on while the camera is fixed (see `Viewer.staticCamera`). */
+	backdropAttachment?: number;
 	onLoad?: (instance: M2Instance) => void;
 	onError?: (error: unknown) => void;
 }
@@ -37,6 +39,7 @@ export function mountInstance(viewer: Viewer, load: () => Promise<M2Instance>, o
 			instance = inst;
 			if (opts.position) positionInstance(inst, opts.position);
 			viewer.add(inst);
+			if (opts.backdropAttachment !== undefined) viewer.setBackdropAttachment(inst, opts.backdropAttachment);
 			if (opts.pivot) viewer.pivot = inst;
 			if (opts.autoFrame ?? true) viewer.frame();
 			opts.onLoad?.(inst);

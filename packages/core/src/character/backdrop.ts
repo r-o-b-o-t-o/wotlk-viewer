@@ -151,14 +151,20 @@ export class BackdropBuilder {
  * Loads a backdrop and puts it behind the models; the returned disposer takes it away again.
  * Separate from `mountInstance` because a backdrop is not one of the viewer's instances: it lives
  * in its own scene, out of reach of framing and the orbit controls.
+ *
+ * `staticCamera` (on by default) also hands the viewer over to the scene's own camera for as long as
+ * the backdrop is up, which is how the character-selection screen shows it (see `Viewer.staticCamera`).
  */
 export function mountBackdrop(
 	viewer: Viewer,
 	load: () => Promise<Backdrop | null>,
-	opts: { onError?: (error: unknown) => void } = {},
+	opts: { staticCamera?: boolean; onError?: (error: unknown) => void } = {},
 ): () => void {
 	let cancelled = false;
 	let instance: M2Instance | null = null;
+	// Set before the load so the models already in the scene stop orbiting right away.
+	const staticCamera = opts.staticCamera ?? true;
+	if (staticCamera) viewer.staticCamera = true;
 	load().then(
 		(backdrop) => {
 			if (!backdrop) return;
@@ -172,6 +178,7 @@ export function mountBackdrop(
 	);
 	return () => {
 		cancelled = true;
+		if (staticCamera) viewer.staticCamera = false;
 		if (instance) {
 			viewer.setBackdrop(null);
 			instance.dispose();

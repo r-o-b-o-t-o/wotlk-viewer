@@ -75,6 +75,8 @@ interface InstanceProps {
 	autoFrame?: boolean;
 	/** Frame and orbit the camera on this model's body alone, gear and everything else left out. */
 	pivot?: boolean;
+	/** Backdrop attachment this model stands on while the camera is fixed (see `Viewer.staticCamera`). */
+	backdropAttachment?: number;
 	onLoad?: (instance: M2Instance) => void;
 	onError?: (error: unknown) => void;
 }
@@ -89,6 +91,7 @@ function useInstance(load: () => Promise<M2Instance>, deps: unknown[], props: In
 			position: props.position,
 			autoFrame: props.autoFrame,
 			pivot: props.pivot,
+			backdropAttachment: props.backdropAttachment,
 			onLoad: (inst) => {
 				setInstance(inst);
 				props.onLoad?.(inst);
@@ -157,12 +160,17 @@ export interface BackdropProps {
 	race: number;
 	/** Class id; death knights get their own scene whatever their race. */
 	classId?: number;
+	/**
+	 * Show the models through the scene's own camera, standing where it stands them, as the
+	 * character-selection screen does; a left-drag then turns the character (default true).
+	 */
+	staticCamera?: boolean;
 	onError?: (error: unknown) => void;
 }
 
 /**
- * Shows a character's character-creation scene behind the models. It keeps its own camera, so the
- * mouse controls leave it alone and it always faces the viewer.
+ * Shows a character's character-creation scene behind the models. The scene keeps its own camera, so
+ * the mouse controls leave it alone and it always faces the viewer.
  */
 export function Backdrop(props: BackdropProps) {
 	const viewer = useViewer();
@@ -176,10 +184,10 @@ export function Backdrop(props: BackdropProps) {
 					props.race,
 					props.classId,
 				),
-			{ onError: (e) => props.onError?.(e) },
+			{ staticCamera: props.staticCamera, onError: (e) => props.onError?.(e) },
 		);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [props.race, props.classId]);
+	}, [props.race, props.classId, props.staticCamera]);
 	return null;
 }
 

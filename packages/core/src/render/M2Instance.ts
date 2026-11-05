@@ -236,20 +236,39 @@ export class M2Instance extends Object3D {
 		this.animator.play(seq, loop);
 	}
 
-	/** Attaches a child instance to an attachment point (see AttachmentId). Returns false if the model lacks it. */
-	attachModel(child: M2Instance, attachmentId: number): boolean {
+	/** The model's attachment point with this id (see AttachmentId), or null when it has no usable one. */
+	private attachment(attachmentId: number): M2Attachment | null {
 		const { m2 } = this.model;
 		const idx = m2.attachmentLookup[attachmentId];
-		if (idx === undefined || idx < 0 || idx >= m2.attachments.length) return false;
+		if (idx === undefined || idx < 0 || idx >= m2.attachments.length) return null;
 		// An out-of-range bone would leave the render loop without a matrix to follow.
-		if (m2.attachments[idx].bone >= m2.bones.length) return false;
+		return m2.attachments[idx].bone < m2.bones.length ? m2.attachments[idx] : null;
+	}
+
+	/** Attaches a child instance to an attachment point (see AttachmentId). Returns false if the model lacks it. */
+	attachModel(child: M2Instance, attachmentId: number): boolean {
+		const attachment = this.attachment(attachmentId);
+		if (!attachment) return false;
 		this.detachModel(child);
 		child.matrixAutoUpdate = false;
 		// Items draw before the body, so a helmet's translucent parts cannot paint over the face behind it.
 		child.setRenderOrder(this.mesh.renderOrder - 1);
-		this.attached.push({ instance: child, attachment: m2.attachments[idx] });
+		this.attached.push({ instance: child, attachment });
 		this.add(child);
 		return true;
+	}
+
+	/**
+	 * Where an attachment point sits in this instance's own space, bone animation included. Null when
+	 * the model has no such point (see AttachmentId).
+	 */
+	attachmentMatrix(attachmentId: number, out: Matrix4): Matrix4 | null {
+		const attachment = this.attachment(attachmentId);
+		if (!attachment) return null;
+		const { bone, position } = attachment;
+		return out
+			.copy(this.animator.boneMatrices[bone])
+			.multiply(tmpMat.makeTranslation(position[0], position[1], position[2]));
 	}
 
 	/**

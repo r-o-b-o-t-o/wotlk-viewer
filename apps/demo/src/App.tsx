@@ -2,6 +2,8 @@ import { createEffect, createResource, createSignal, For, on, Show, type JSX } f
 import { createStore } from "solid-js/store";
 import {
 	AssetManager,
+	BACKDROP_CHARACTER_ATTACHMENT,
+	BACKDROP_PET_ATTACHMENT,
 	EquipmentSlot,
 	GameData,
 	HttpDataSource,
@@ -402,7 +404,8 @@ export function App(): JSX.Element {
 			<main class="viewport">
 				{/* `window.viewer` is exposed for poking at the scene from the devtools console. */}
 				<WowViewer ref={(v) => ((window as unknown as { viewer: unknown }).viewer = v)}>
-					{/* The race's character-creation scene; it keeps its own camera and never orbits. */}
+					{/* The race's character-creation scene, shown through its own camera as the
+					    character-selection screen does: left-drag then turns the character. */}
 					<Show when={mode() === "character" && showBackground()}>
 						<Backdrop
 							assets={assets}
@@ -419,6 +422,7 @@ export function App(): JSX.Element {
 							appearance={appearance}
 							animation={animation()}
 							pivot
+							backdropAttachment={BACKDROP_CHARACTER_ATTACHMENT}
 							onLoad={onLoad}
 							onError={onError}
 						/>
@@ -432,6 +436,7 @@ export function App(): JSX.Element {
 								displayId={pet().displayId}
 								pet={pet()}
 								position={petPosition}
+								backdropAttachment={BACKDROP_PET_ATTACHMENT}
 								onError={onError}
 							/>
 						)}

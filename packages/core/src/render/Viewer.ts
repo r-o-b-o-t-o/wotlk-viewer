@@ -470,12 +470,13 @@ export class Viewer {
 		if (fixed) this.placeOnBackdrop();
 		this.root.updateMatrixWorld(true);
 		for (const inst of this.instances) inst.update(dtMs * this.timeScale, camera);
-		// Two passes with the depth buffer cleared between them: the backdrop keeps the depths its own
-		// scene was built at, and the models always draw in front of all of it.
 		this.renderer.autoClear = false;
 		this.renderer.clear();
 		this.renderer.render(this.backdropScene, this.backdropCamera);
-		this.renderer.clearDepth();
+		// Through the scene's own camera the two passes measure depth the same way, so the models keep
+		// the backdrop's depths and its foreground props cover them, as they do in the client. Under
+		// the orbit camera the depths mean nothing to each other, and the models draw over all of it.
+		if (!fixed) this.renderer.clearDepth();
 		this.renderer.render(this.scene, camera);
 		this.renderer.autoClear = true;
 	}

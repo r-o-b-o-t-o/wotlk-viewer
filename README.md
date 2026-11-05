@@ -313,15 +313,18 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   `attenuation_end` go unread, and only its diffuse side is used, every light in the client with an ambient term
   being a backdrop's directional one. `Viewer` sets `outputColorSpace = LinearSRGBColorSpace` because shading is
   done in gamma space; mixing in standard three.js materials needs color-management care.
-- A backdrop is a second render pass with the depth buffer cleared after it, so the character is drawn on top of the
-  whole scene — where the client puts it inside one scene, with foreground props able to cover it and a shadow on
-  the ground. Nothing else about the two passes is shared: the models keep the viewer's own lighting and stay
-  unfogged, where the client lights a character and its pet from light sets of their own.
+- A backdrop is a second render pass. Under `staticCamera` both passes measure depth through the same camera, so the
+  models keep the scene's depths and its foreground props cover them, as they do in the client; under the orbit
+  camera the two have nothing to say to each other, the depth buffer is cleared between them, and the models draw
+  on top of the whole scene. Either way the passes share nothing else: the models keep the viewer's own lighting
+  and stay unfogged, where the client lights a character and its pet from light sets of their own, and translucent
+  parts of a model are not sorted against the scene's — each pass sorts its own. The client's ground shadow under
+  the character is not drawn.
 - `staticCamera` reproduces the character-selection view: the scene's camera, its attachment points, a facing of
   0.6° per pixel dragged, and the bone animation the scene turns and scales its attachment points with, all as the
   client does them. What it leaves out is the rest of that screen — the rotate buttons, the glue frame's fade, and
-  the death-knight ghost lighting — and the models still draw over the scene rather than inside it. A model's own
-  `position` is ignored while it stands on an attachment, since the client gives it a rotation and a scale only.
+  the death-knight ghost lighting. A model's own `position` is ignored while it stands on an attachment, since the
+  client gives it a rotation and a scale only.
 - A backdrop is lit from two places, as the glue screen lights it: its scene light set and fog are the `RaceLights`
   and `CharModelFogInfo` tables in the client's `Interface\GlueXML\GlueParent.lua`, and its moonwells, torches and
   braziers are the point lights inside the model itself, which follow their bones and flicker on their global

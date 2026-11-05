@@ -34,10 +34,14 @@ export class CreatureBuilder {
 			const row = (await this.data.particleColors()).get(cdi.particleColorId);
 			if (row) inst.setParticleColors(row.colors);
 		}
-		let scale = cdi.scale > 0 ? cdi.scale : 1;
-		if (pet?.tamed) {
+		// `ShowCharacter` sizes a pet by its family alone, dropping both table scales as soon as one
+		// answers; anything else is the model's scale times the display's.
+		const cmd = (await this.data.creatureModelData()).get(cdi.modelId);
+		let scale = (cmd?.scale || 1) * (cdi.scale > 0 ? cdi.scale : 1);
+		if (pet) {
 			const family = (await this.data.creatureFamilies()).get(pet.family);
-			if (family) scale *= petScale(family, pet.level);
+			const familyScale = family ? petScale(family, pet.level) : 0;
+			if (familyScale > 0) scale = familyScale;
 		}
 		inst.scale.setScalar(scale);
 		return inst;

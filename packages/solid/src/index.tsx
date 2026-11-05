@@ -222,7 +222,7 @@ export function Creature(props: CreatureProps): JSX.Element {
 	const data = createMemo(() => props.gameData ?? new GameData(props.assets));
 	useInstance(
 		() => new CreatureBuilder(props.assets, data(), viewer.lighting).build(props.displayId, props.pet),
-		() => `${props.displayId}|${props.pet?.family}|${props.pet?.level}|${props.pet?.tamed}`,
+		() => `${props.displayId}|${props.pet?.family}|${props.pet?.level}`,
 		props,
 	);
 	return null;

@@ -28,6 +28,8 @@ export interface CreatureDisplayInfo {
 export interface CreatureModelData {
 	id: number;
 	modelName: string;
+	/** Scale the model is drawn at before the display's own; 1 on all but three rows. */
+	scale: number;
 }
 
 /** CreatureFamily.dbc: the size a tamed pet of this family grows to between two levels. */
@@ -185,7 +187,7 @@ export class GameData {
 
 	creatureModelData(): Promise<Map<number, CreatureModelData>> {
 		return this.table("CreatureModelData", (d) =>
-			byId(d.map((i) => ({ id: d.uint(i, 0), modelName: d.string(i, 2) }))),
+			byId(d.map((i) => ({ id: d.uint(i, 0), modelName: d.string(i, 2), scale: d.float(i, 4) }))),
 		);
 	}
 

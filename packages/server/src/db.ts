@@ -50,7 +50,7 @@ export interface CharacterPet {
 	displayId: number;
 	name: string;
 	level: number;
-	/** CreatureFamily.dbc id, which is what sizes a tamed pet; 0 without the world database. */
+	/** CreatureFamily.dbc id, which is what sizes a pet; 0 without the world database. */
 	family: number;
 	/** A tamed hunter pet, as opposed to a summon. */
 	tamed: boolean;

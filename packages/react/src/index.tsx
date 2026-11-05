@@ -209,7 +209,7 @@ export function Creature(props: CreatureProps) {
 			data.current ??= props.gameData ?? new GameData(props.assets);
 			return new CreatureBuilder(props.assets, data.current, viewer.lighting).build(props.displayId, props.pet);
 		},
-		[props.displayId, props.pet?.family, props.pet?.level, props.pet?.tamed],
+		[props.displayId, props.pet?.family, props.pet?.level],
 		props,
 	);
 	return null;

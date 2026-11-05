@@ -6,8 +6,6 @@ export interface PetInfo {
 	/** CreatureFamily.dbc id; 0 when it is not known. */
 	family: number;
 	level: number;
-	/** A tamed hunter pet, which is sized by its family; summons keep their display scale. */
-	tamed: boolean;
 }
 
 /** Half-width of a player character; the broadest races reach about this, the slimmest are not far off. */
@@ -16,13 +14,6 @@ const CHARACTER_HALF_WIDTH = 0.7;
 const PET_GAP = 0.1;
 /** How far behind the character the pet stands. */
 const PET_SETBACK = 1.6;
-
-/**
- * Ceiling on the family scale. AzerothCore caps `maxScale` at this for eleven exotic families, and
- * of those only the crab's DBC value (1.4) is over it, so one flat cap reproduces the whole
- * correction. It also trims the cat, which the server leaves at 1.1.
- */
-const PET_MAX_SCALE = 1;
 
 /**
  * Where a pet stands next to its owner, in the character's own space (X forward, Y left, Z up): off
@@ -40,13 +31,14 @@ export function petPosition(pet: M2Instance): [number, number, number] {
 }
 
 /**
- * How much a tamed pet's model is scaled on top of its display scale: its family's size at level
- * `minScaleLevel`, growing to the one at `maxScaleLevel`, capped at `PET_MAX_SCALE`. Summoned pets
- * (warlock, mage) are not scaled this way, and their families carry the same value at both ends.
+ * The size a pet of this family is drawn at: its family's scale at `minScaleLevel` growing to the
+ * one at `maxScaleLevel`. This is the whole scale, not a factor on the display's — `ShowCharacter`
+ * drops what `CreatureModelData` and `CreatureDisplayInfo` asked for as soon as a family answers.
+ * Warlock and death knight pets have a family too, carrying the same value at both ends. Zero for
+ * "Remote Control", the one family with no size of its own, which leaves the display's scale alone.
  */
 export function petScale(family: CreatureFamily, level: number): number {
-	if (!(family.minScale > 0)) return 1; // "Remote Control", the one family with no size of its own
 	const span = family.maxScaleLevel - family.minScaleLevel;
 	const t = span > 0 ? Math.min(Math.max((level - family.minScaleLevel) / span, 0), 1) : 1;
-	return Math.min(family.minScale + t * (family.maxScale - family.minScale), PET_MAX_SCALE);
+	return family.minScale + t * (family.maxScale - family.minScale);
 }

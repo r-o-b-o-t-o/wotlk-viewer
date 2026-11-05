@@ -290,11 +290,15 @@ Things deliberately left out or approximated; worth deciding on if they matter f
 - NPC humanoids (`CreatureDisplayInfoExtra`, baked NPC textures) are not supported; `CreatureBuilder` only handles
   monster texture variations and scale.
 - `CharSections.Flags` are ignored, so `customizationOptions()` also lists NPC-only / death-knight-only skins.
-- A tamed pet's size is its `CreatureFamily.dbc` scale for its level, on top of the display scale, which is what
-  AzerothCore sends as the pet's object scale; summons (warlock, mage) keep the display scale, and their families
-  carry one flat value anyway. The family scale is then capped at 1.0, standing in for AzerothCore's own cap on
-  eleven exotic families: of those only the crab's DBC value (1.4) is above 1.0, so the flat cap reproduces the
-  whole correction, and the one family it trims that the server does not is the cat (1.1).
+- A pet's size is its `CreatureFamily.dbc` scale for its level and nothing else, as `ShowCharacter` sizes it: the
+  family's scale at `minScaleLevel` growing to the one at `maxScaleLevel`, which _replaces_ what
+  `CreatureModelData` and `CreatureDisplayInfo` asked for rather than scaling it. Warlock and death knight pets
+  have a family too (felguard 0.9, imp 0.5, voidwalker 0.8, ghoul 1.0), carrying one flat value at both ends, so
+  they are sized the same way; a grown cat reaches 1.1 and a crab 1.4, both over the 1.0 cap AzerothCore applies
+  to the object scale it sends for the world, which the glue screen never asks for. "Remote Control", the one
+  family with no size of its own, leaves the display's scale alone. Everything that is not a pet is drawn at
+  `CreatureModelData.ModelScale` times `CreatureDisplayInfo.CreatureModelScale`, the first of which is 1 on all
+  but three of the client's 1,331 model rows.
 - `petPosition` assumes a fixed character half-width rather than measuring the owner, since every playable race is
   about as broad. The pet's own distance follows the narrower of its two horizontal bind-pose extents, because a
   bind pose splays wings or arms along one axis and would otherwise push a moth halfway across the scene. Both

@@ -63,7 +63,7 @@ describe.skipIf(!hasClient)("GameData", () => {
 		expect(await data.findHairTexture(7, 0, 3)).toBe("Character\\Gnome\\Hair00_03.blp");
 	});
 
-	it("sizes a tamed pet from its creature family", async () => {
+	it("sizes a pet from its creature family", async () => {
 		const data = await load();
 		const moth = (await data.creatureFamilies()).get(37)!;
 		expect(moth.name).toBe("Moth");
@@ -74,10 +74,13 @@ describe.skipIf(!hasClient)("GameData", () => {
 		// Warlock pets carry one flat size at both ends.
 		const imp = (await data.creatureFamilies()).get(23)!;
 		expect([petScale(imp, 1), petScale(imp, 80)]).toEqual([0.5, 0.5]);
-		// The crab is the one family whose DBC size runs over the 1.0 cap.
+		// The family's size is the whole scale, uncapped: the client drops the display's as soon as a
+		// family answers, so a grown crab really is drawn at 1.4.
 		const crab = (await data.creatureFamilies()).get(8)!;
 		expect(crab.maxScale).toBeCloseTo(1.4);
-		expect(petScale(crab, 80)).toBe(1);
+		expect(petScale(crab, 80)).toBeCloseTo(1.4);
+		// "Remote Control" carries no size of its own, and leaves the display's scale alone.
+		expect(petScale((await data.creatureFamilies()).get(28)!, 80)).toBe(0);
 	});
 
 	it("has a character-creation backdrop for every playable race", async () => {

@@ -186,6 +186,7 @@ export class Viewer {
 		this.controls.enabled = !on;
 		this.pendingZoom = 0;
 		this.facing = 0;
+		this.updateModelScene();
 		// Placement is written straight into the matrices while fixed; let three.js have them back.
 		for (const inst of this.instances) inst.matrixAutoUpdate = !(on && this.backdropAttachments.has(inst));
 	}
@@ -292,11 +293,11 @@ export class Viewer {
 	setBackdrop(instance: M2Instance | null, lighting?: BackdropLighting): void {
 		if (this.backdrop) this.backdropRoot.remove(this.backdrop);
 		this.backdrop = null;
-		if (!instance) return;
+		if (!instance) return this.updateModelScene();
 		const cam = instance.model.m2.cameras[0];
 		if (!cam) {
 			console.warn(`Backdrop ${instance.model.path} carries no camera, so there is no view to show it from.`);
-			return;
+			return this.updateModelScene();
 		}
 		this.backdrop = instance;
 		this.backdropRoot.add(instance);
@@ -310,6 +311,16 @@ export class Viewer {
 		this.backdropCamera.matrixWorldInverse.copy(this.backdropCamera.matrixWorld).invert();
 		this.updateBackdropProjection();
 		this.applyBackdropLighting(lighting);
+		this.updateModelScene();
+	}
+
+	/**
+	 * Keeps the models in the scene they belong in: the backdrop's own while the camera is fixed, so
+	 * that one pass sorts them against its batches, and their own scene the rest of the time.
+	 */
+	private updateModelScene(): void {
+		const scene = this.fixedCamera && this.backdrop ? this.backdropScene : this.scene;
+		if (this.root.parent !== scene) scene.add(this.root);
 	}
 
 	/** Turns a backdrop's light set into the view-space one its materials already read. */
@@ -470,13 +481,17 @@ export class Viewer {
 		if (fixed) this.placeOnBackdrop();
 		this.root.updateMatrixWorld(true);
 		for (const inst of this.instances) inst.update(dtMs * this.timeScale, camera);
+		// Fixed: the models stand in the backdrop's own scene, so one pass draws the lot and three.js
+		// depth-tests and sorts them against its batches, as the client's single scene does. A
+		// translucent batch writes no depth, so it can only cover what was drawn before it: in two
+		// passes a banner in front of a character would always end up behind it.
+		if (fixed) return this.renderer.render(this.backdropScene, this.backdropCamera);
+		// Otherwise two passes with the depth buffer cleared between them: the backdrop keeps the
+		// depths its own scene was built at, and the models always draw in front of all of it.
 		this.renderer.autoClear = false;
 		this.renderer.clear();
 		this.renderer.render(this.backdropScene, this.backdropCamera);
-		// Through the scene's own camera the two passes measure depth the same way, so the models keep
-		// the backdrop's depths and its foreground props cover them, as they do in the client. Under
-		// the orbit camera the depths mean nothing to each other, and the models draw over all of it.
-		if (!fixed) this.renderer.clearDepth();
+		this.renderer.clearDepth();
 		this.renderer.render(this.scene, camera);
 		this.renderer.autoClear = true;
 	}

@@ -313,13 +313,19 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   `attenuation_end` go unread, and only its diffuse side is used, every light in the client with an ambient term
   being a backdrop's directional one. `Viewer` sets `outputColorSpace = LinearSRGBColorSpace` because shading is
   done in gamma space; mixing in standard three.js materials needs color-management care.
-- A backdrop is a second render pass. Under `staticCamera` both passes measure depth through the same camera, so the
-  models keep the scene's depths and its foreground props cover them, as they do in the client; under the orbit
-  camera the two have nothing to say to each other, the depth buffer is cleared between them, and the models draw
-  on top of the whole scene. Either way the passes share nothing else: the models keep the viewer's own lighting
-  and stay unfogged, where the client lights a character and its pet from light sets of their own, and translucent
-  parts of a model are not sorted against the scene's — each pass sorts its own. The client's ground shadow under
-  the character is not drawn.
+- Under `staticCamera` the models are drawn inside the backdrop's own scene, in a single pass, so three.js
+  depth-tests and sorts them against its batches the way the client's one scene does: scenery covers a model that
+  stands behind it, and a translucent banner in front of one hangs in front of it — a translucent batch writes no
+  depth, so in two passes it could only ever cover what the pass before it drew. The sort is coarser than the
+  client's, which orders every batch by distance: three.js orders whole objects by their origin, and the backdrop
+  is one object, as is each model, so translucent surfaces of a scene and a model that overlap can still stack
+  wrongly. Under the orbit camera the backdrop stays a pass of its own with the depth buffer cleared after it, and
+  the models draw on top of all of it.
+- The models keep the viewer's own lighting either way, where the glue screen lights the character and its pet with
+  the same `RaceLights` rows it lights the scene with (`AddCharacterLight` and `AddPetLight` in `GlueParent.lua`
+  take the same values as `AddLight`), and lights a dead one from `LightParams` row 3 instead. Fog reaches the
+  scene alone in the client too, the character and pet being lit from light sets that carry none. The ground shadow
+  under the character is not drawn.
 - `staticCamera` reproduces the character-selection view: the scene's camera, its attachment points, a facing of
   0.6° per pixel dragged, and the bone animation the scene turns and scales its attachment points with, all as the
   client does them. What it leaves out is the rest of that screen — the rotate buttons, the glue frame's fade, and

@@ -3,6 +3,7 @@ import { BinaryReader } from "../io/BinaryReader.js";
 import { M2BlendMode, M2SequenceFlags, type M2Data, type M2Track } from "../formats/m2.js";
 import type { SkinData } from "../formats/skin.js";
 import { readTrackKeys, type TrackKeys, type TrackKind } from "../animation/tracks.js";
+import { resolveBatchShaders, type BatchShader } from "./batchShader.js";
 
 /**
  * A loaded model shared between instances: parsed M2 + skin profile, the GPU geometry
@@ -10,6 +11,8 @@ import { readTrackKeys, type TrackKeys, type TrackKind } from "../animation/trac
  */
 export class M2Model {
 	readonly geometry: BufferGeometry;
+	/** What each skin batch draws once the client's shader substitution has run. */
+	readonly batchShaders: BatchShader[];
 	/** Directory of the model, with trailing slash. */
 	readonly dir: string;
 	readonly name: string;
@@ -24,7 +27,8 @@ export class M2Model {
 		const norm = path.replace(/\\/g, "/");
 		this.dir = norm.slice(0, norm.lastIndexOf("/") + 1);
 		this.name = norm.slice(this.dir.length).replace(/\.(m2|mdx|mdl)$/i, "");
-		this.geometry = buildGeometry(m2, skin);
+		this.batchShaders = resolveBatchShaders(m2, skin);
+		this.geometry = buildGeometry(m2, skin, this.batchShaders);
 		this.seqReaders = m2.sequences.map((s) => (s.flags & M2SequenceFlags.Embedded ? m2.reader : undefined));
 	}
 
@@ -113,7 +117,7 @@ export class M2Model {
 	}
 }
 
-function buildGeometry(m2: M2Data, skin: SkinData): BufferGeometry {
+function buildGeometry(m2: M2Data, skin: SkinData, shaders: BatchShader[]): BufferGeometry {
 	const src = m2.vertices;
 	const n = skin.vertices.length;
 	const positions = new Float32Array(n * 3);
@@ -159,7 +163,8 @@ function buildGeometry(m2: M2Data, skin: SkinData): BufferGeometry {
 		const mode = m2.materials[skin.batches[i].materialIndex].blendMode;
 		return mode === M2BlendMode.Add || mode === M2BlendMode.NoAlphaAdd ? 1 : 0;
 	};
-	const order = skin.batches.map((_, i) => i);
+	// A batch the substitution folded into another one's draw gets no group: it is not drawn at all.
+	const order = skin.batches.map((_, i) => i).filter((i) => !shaders[i].skip);
 	order.sort(
 		(a, b) => skin.batches[a].priorityPlane - skin.batches[b].priorityPlane || isGlow(a) - isGlow(b) || a - b,
 	);

@@ -1,7 +1,7 @@
 import { Bone, Camera, DetachedBindMode, Matrix4, Object3D, Skeleton, SkinnedMesh, Texture, Vector3 } from "three";
 import type { AssetManager } from "../AssetManager.js";
 import { M2Animator, type BillboardBasis } from "../animation/M2Animator.js";
-import { M2BlendMode, M2Combiner, M2TextureType, type M2Attachment } from "../formats/m2.js";
+import { M2BlendMode, M2TextureType, type M2Attachment } from "../formats/m2.js";
 import { M2Material, TexCoordSource, type M2Lighting } from "./M2Material.js";
 import type { M2Model } from "./M2Model.js";
 import { ParticleSystem, type EmitterFrames } from "./ParticleSystem.js";
@@ -89,22 +89,15 @@ export class M2Instance extends Object3D {
 			bones.map(() => new Matrix4()),
 		);
 
-		this.materials = skin.batches.map((b) => {
+		this.materials = skin.batches.map((b, bi) => {
 			const mat = m2.materials[b.materialIndex];
-			const coords = [TexCoordSource.Uv0, TexCoordSource.Uv0] as [TexCoordSource, TexCoordSource];
-			for (let i = 0; i < Math.min(b.textureCount, 2); i++) {
-				const unit = m2.textureUnitLookup[b.textureCoordComboIndex + i];
-				coords[i] = unit < 0 ? TexCoordSource.Env : unit === 1 ? TexCoordSource.Uv1 : TexCoordSource.Uv0;
-			}
-			// The batch's shader id names a combiner per layer; without the override array the client
-			// modulates, which is what a missing entry falls back to.
+			const shader = model.batchShaders[bi];
 			return new M2Material(
 				{
 					blendMode: mat.blendMode,
 					flags: mat.flags,
-					textureCount: Math.min(b.textureCount, 2),
-					texCoords: coords,
-					combiner: m2.textureCombinerCombos[b.shaderId + 1] ?? M2Combiner.Mod,
+					texCoords: shader.texCoords,
+					pixelShader: shader.pixelShader,
 				},
 				lighting,
 				assets.whiteTexture,
@@ -181,10 +174,9 @@ export class M2Instance extends Object3D {
 	}
 
 	private applyTextures(): void {
-		const { m2, skin } = this.model;
-		skin.batches.forEach((b, bi) => {
-			for (let i = 0; i < Math.min(b.textureCount, 2); i++) {
-				const ti = m2.textureLookup[b.textureComboIndex + i];
+		this.model.batchShaders.forEach((shader, bi) => {
+			for (let i = 0; i < shader.textureCount; i++) {
+				const ti = shader.textures[i];
 				this.materials[bi].setTexture(i as 0 | 1, this.textures[ti] ?? this.assets.whiteTexture);
 			}
 		});
@@ -373,9 +365,10 @@ export class M2Instance extends Object3D {
 			const wi = m2.transparencyLookup[b.textureWeightComboIndex];
 			if (wi !== undefined && wi >= 0 && wi < anim.textureWeights.length) a *= anim.textureWeights[wi];
 			mat.setColor(r, g, bl, a);
-			for (let i = 0; i < Math.min(b.textureCount, 2); i++) {
-				const ti = m2.textureTransformLookup[b.textureTransformComboIndex + i];
-				mat.setTextureMatrix(i as 0 | 1, ti !== undefined && ti >= 0 ? anim.textureMatrices[ti] : null);
+			const shader = this.model.batchShaders[bi];
+			for (let i = 0; i < shader.textureCount; i++) {
+				const ti = shader.transforms[i];
+				mat.setTextureMatrix(i as 0 | 1, ti >= 0 ? anim.textureMatrices[ti] : null);
 			}
 		});
 	}

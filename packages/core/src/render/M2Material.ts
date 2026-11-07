@@ -29,13 +29,42 @@ export const enum TexCoordSource {
 	Env = 2,
 }
 
+/**
+ * The client's M2 pixel shaders, as `CM2Shared::GetEffect` names them. The first six take one
+ * texture and the rest two; `COMBINER_GLSL` carries the formula for each.
+ */
+export const enum PixelShader {
+	Opaque = 0,
+	Mod = 1,
+	Mod2x = 2,
+	Add = 3,
+	Decal = 4,
+	Fade = 5,
+	OpaqueOpaque = 6,
+	OpaqueMod = 7,
+	OpaqueMod2x = 8,
+	OpaqueMod2xNA = 9,
+	OpaqueAdd = 10,
+	OpaqueAddNA = 11,
+	ModOpaque = 12,
+	ModMod = 13,
+	ModMod2x = 14,
+	ModMod2xNA = 15,
+	ModAdd = 16,
+	ModAddNA = 17,
+	AddMod = 18,
+	Mod2xMod2x = 19,
+	OpaqueMod2xNAAlpha = 20,
+	OpaqueAddAlpha = 21,
+	OpaqueAddAlphaAlpha = 22,
+}
+
 export interface M2MaterialOptions {
 	blendMode: number;
 	flags: number;
-	textureCount: number;
 	texCoords: [TexCoordSource, TexCoordSource];
-	/** How the second texture layer combines with the first (see M2Combiner). */
-	combiner: number;
+	/** Which of the client's pixel shaders combines the layers (see PixelShader). */
+	pixelShader: number;
 }
 
 /** How many directional lights a material shades with; the glue backdrops use at most three. */
@@ -210,15 +239,52 @@ void main() {
 }
 `;
 
+/**
+ * The client's pixel-shader table, one branch per `PixelShader`, over the same terms it names:
+ * `in` is the vertex colour the lighting already went into, and `t0`/`t1` the two texture layers.
+ * An "NA" variant leaves the second layer's alpha out of the result, and the three `Alpha` ones at
+ * the end are the specialized shaders a folded multi-layer material lands on. A one-texture shader
+ * ignores `t1`, which is the white placeholder for want of a second layer.
+ */
+const COMBINER_GLSL = /* glsl */ `
+uniform int uPixelShader;
+
+vec4 m2Combine(vec3 c, float a, vec4 t0, vec4 t1) {
+  int s = uPixelShader;
+  if (s == ${PixelShader.Opaque}) return vec4(c * t0.rgb, a);
+  if (s == ${PixelShader.Mod}) return vec4(c * t0.rgb, a * t0.a);
+  if (s == ${PixelShader.Mod2x}) return vec4(c * t0.rgb * 2.0, a * t0.a * 2.0);
+  if (s == ${PixelShader.Add}) return vec4(c + t0.rgb, a + t0.a);
+  if (s == ${PixelShader.Decal}) return vec4(mix(c, t0.rgb, a), a);
+  if (s == ${PixelShader.Fade}) return vec4(mix(t0.rgb, c, a), a);
+  if (s == ${PixelShader.OpaqueOpaque}) return vec4(c * t0.rgb * t1.rgb, a);
+  if (s == ${PixelShader.OpaqueMod}) return vec4(c * t0.rgb * t1.rgb, a * t1.a);
+  if (s == ${PixelShader.OpaqueMod2x}) return vec4(c * t0.rgb * t1.rgb * 2.0, a * t1.a * 2.0);
+  if (s == ${PixelShader.OpaqueMod2xNA}) return vec4(c * t0.rgb * t1.rgb * 2.0, a);
+  if (s == ${PixelShader.OpaqueAdd}) return vec4(c * t0.rgb + t1.rgb, a + t1.a);
+  if (s == ${PixelShader.OpaqueAddNA}) return vec4(c * t0.rgb + t1.rgb, a);
+  if (s == ${PixelShader.ModOpaque}) return vec4(c * t0.rgb * t1.rgb, a * t0.a);
+  if (s == ${PixelShader.ModMod}) return vec4(c * t0.rgb * t1.rgb, a * t0.a * t1.a);
+  if (s == ${PixelShader.ModMod2x}) return vec4(c * t0.rgb * t1.rgb * 2.0, a * t0.a * t1.a * 2.0);
+  if (s == ${PixelShader.ModMod2xNA}) return vec4(c * t0.rgb * t1.rgb * 2.0, a * t0.a);
+  if (s == ${PixelShader.ModAdd}) return vec4(c * t0.rgb + t1.rgb, a * t0.a + t1.a);
+  if (s == ${PixelShader.ModAddNA}) return vec4(c * t0.rgb + t1.rgb, a * t0.a);
+  if (s == ${PixelShader.AddMod}) return vec4((c + t0.rgb) * t1.rgb, (a + t0.a) * t1.a);
+  if (s == ${PixelShader.Mod2xMod2x}) return vec4(c * t0.rgb * t1.rgb * 4.0, t0.a * t1.a * 4.0);
+  if (s == ${PixelShader.OpaqueMod2xNAAlpha}) return vec4(c * t0.rgb * mix(t1.rgb * 2.0, vec3(1.0), t0.a), a);
+  if (s == ${PixelShader.OpaqueAddAlpha}) return vec4(c * t0.rgb + t1.rgb * t1.a, a);
+  if (s == ${PixelShader.OpaqueAddAlphaAlpha}) return vec4(c * t0.rgb + t1.rgb * t1.a * t0.a, a);
+  return vec4(c * t0.rgb, a * t0.a);
+}
+`;
+
 const FRAGMENT = /* glsl */ `
 uniform sampler2D uTex0;
 uniform sampler2D uTex1;
 uniform vec4 uColor;
-uniform int uTexCount;
-uniform int uCombiner;
 uniform float uAlphaTest;
-uniform bool uOpaque;
 uniform bool uUnlit;
+${COMBINER_GLSL}
 ${FOG_GLSL}
 varying vec2 vUv0;
 varying vec2 vUv1;
@@ -231,28 +297,13 @@ void main() {
   // test cannot stand in for that, an alpha-key ref falling with the alpha and an opaque one being
   // zero throughout, and neither mode looks at alpha when it blends: both would paint on regardless.
   if (uColor.a < 0.0001) discard;
-  vec4 t0 = texture2D(uTex0, vUv0);
-  vec3 rgb = t0.rgb * uColor.rgb;
-  float a = (uOpaque ? 1.0 : t0.a) * uColor.a;
-  if (uTexCount > 1) {
-    // Layer one is always a modulate here; the second layer's op comes from the model (M2Combiner).
-    // The "NA" variants differ only in leaving the alpha of the first layer alone.
-    vec4 t1 = texture2D(uTex1, vUv1);
-    if (uCombiner == 3 || uCombiner == 7) {   // Add, AddNA
-      rgb += t1.rgb;
-      if (uCombiner == 3) a += t1.a;
-    } else if (uCombiner == 4 || uCombiner == 6) {  // Mod2x, Mod2xNA
-      rgb *= t1.rgb * 2.0;
-      if (uCombiner == 4) a *= t1.a * 2.0;
-    } else {                                  // Mod, Opaque and anything not modelled
-      rgb *= t1.rgb;
-      if (uCombiner != 0) a *= t1.a;
-    }
-  }
-  if (a < uAlphaTest) discard;
-  if (!uUnlit) rgb *= gl_FrontFacing ? vLightFront : vLightBack;
-  rgb = m2Fog(rgb, vViewPos.z);
-  gl_FragColor = vec4(rgb, a);
+  // The lighting goes into the colour the combiner starts from, as the client's vertex shader hands
+  // it over already lit; an additive combiner would otherwise light its own summand as well.
+  vec3 c = uColor.rgb;
+  if (!uUnlit) c *= gl_FrontFacing ? vLightFront : vLightBack;
+  vec4 color = m2Combine(c, uColor.a, texture2D(uTex0, vUv0), texture2D(uTex1, vUv1));
+  if (color.a < uAlphaTest) discard;
+  gl_FragColor = vec4(m2Fog(color.rgb, vViewPos.z), color.a);
 }
 `;
 
@@ -316,11 +367,9 @@ export class M2Material extends ShaderMaterial {
 				uTexMat1: { value: new Matrix4() },
 				uTexCoord0: { value: opts.texCoords[0] },
 				uTexCoord1: { value: opts.texCoords[1] },
-				uTexCount: { value: opts.textureCount },
-				uCombiner: { value: opts.combiner },
+				uPixelShader: { value: opts.pixelShader },
 				uColor: { value: new Vector4(1, 1, 1, 1) },
 				uAlphaTest: { value: alphaTestFor(blendMode) },
-				uOpaque: { value: blendMode === M2BlendMode.Opaque },
 				// `s_localLighting` denies the two modulate modes the scene lighting whatever the material's
 				// own bit says; `setColor` supplies the flat colour that goes with it.
 				uUnlit: {

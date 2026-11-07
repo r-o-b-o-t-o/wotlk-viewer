@@ -306,10 +306,16 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   band of their own and so ahead of or behind a backdrop wholesale. Standing the backdrop first is the way round
   that suits a character-selection screen, where the models stand in front of the scene; translucent scene
   geometry genuinely nearer than a model, such as a tuft of the Tauren scene's foreground grass, loses to it.
-- The second texture layer's combiner comes from `textureCombinerCombos`, indexed by the batch's shader id. The
-  first layer's op is assumed to be a modulate, which holds on all but two of the client's item batches, and the
-  Decal, Fade and Envmap ops are not modelled and fall back to a modulate. Batches never carry more than two
-  textures.
+- A batch's combiner ops and its texture layers go through the client's own two rewrites,
+  `CM2Shared::SubstituteSimpleShaders` and `SubstituteSpecializedShaders`, and the 23 pixel shaders they select
+  between are implemented as written. The second rewrite folds a multi-layer material — a base pass, a
+  sphere-mapped Mod2x or Add over it, and an alpha pass on top — into a single two-texture draw, which drops 7,246
+  of the client's 61,170 batches and sends 5,286 through the three specialized shaders. Batches never carry more
+  than two textures.
+- A one-texture batch reading UV set 1 takes its texture matrix in slot 0, where the client moves it to slot 1
+  (the `0x4000` bit of the rewritten shader id, which pairs with its `Diffuse_T2` vertex shader). It is the same
+  matrix on the same coordinates either way, so the two should agree; the BLS shader that would settle it has not
+  been decompiled. It reaches 87 batches on 82 models, 33 of which carry a texture transform at all.
 - Particle `zSource`, which aims the emission away from a point on the emitter's Z axis, is deliberately skipped.
   It reaches 163 base models, 48 of them items — every one a rifle or shotgun firing a muzzle flash bar the
   Transcendence priest helm — and was triaged as not worth the code. The client reads it ahead of

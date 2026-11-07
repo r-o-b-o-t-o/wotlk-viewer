@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry } from "three";
 import { BinaryReader } from "../io/BinaryReader.js";
 import { M2BlendMode, M2SequenceFlags, type M2Data, type M2Track } from "../formats/m2.js";
-import type { SkinData } from "../formats/skin.js";
+import type { SkinBatch, SkinData } from "../formats/skin.js";
 import { readTrackKeys, type TrackKeys, type TrackKind } from "../animation/tracks.js";
 import { resolveBatchShaders, type BatchShader } from "./batchShader.js";
 
@@ -159,14 +159,32 @@ function buildGeometry(m2: M2Data, skin: SkinData, shaders: BatchShader[]): Buff
 	//
 	// Additive batches come last within a plane: they are glow decals, and a translucent layer over
 	// the surface behind them would otherwise paint them out (the rune on Titansteel Shield Wall).
+	// The layers of one material are exempt and keep the `materialLayer` order the client's own
+	// comparator gives them: a stack is one surface painted over and over, and lifting its additive
+	// layer to the end of the plane composites it outside the alpha layer that should cover it.
 	const isGlow = (i: number) => {
 		const mode = m2.materials[skin.batches[i].materialIndex].blendMode;
 		return mode === M2BlendMode.Add || mode === M2BlendMode.NoAlphaAdd ? 1 : 0;
 	};
+	// A stack therefore sorts as a whole, on its base batch. It is not a run of consecutive batches —
+	// two submeshes sharing a three-layer material interleave as 0,0,1,1,2,2 (Lady Alexstrasza) — so
+	// the base is found by submesh and by `materialIndex - materialLayer`, the base material the
+	// client derives the same way. Over the whole client every batch has exactly one base on that
+	// key, it always comes earlier in the file, and the two agree on the priority plane.
+	const stackKey = (b: SkinBatch) => `${b.submeshIndex}:${b.materialIndex - b.materialLayer}`;
+	const bases = new Map<string, number>();
+	skin.batches.forEach((b, i) => {
+		if (b.materialLayer === 0 && !bases.has(stackKey(b))) bases.set(stackKey(b), i);
+	});
+	const baseOf = skin.batches.map((b, i) => bases.get(stackKey(b)) ?? i);
 	// A batch the substitution folded into another one's draw gets no group: it is not drawn at all.
 	const order = skin.batches.map((_, i) => i).filter((i) => !shaders[i].skip);
 	order.sort(
-		(a, b) => skin.batches[a].priorityPlane - skin.batches[b].priorityPlane || isGlow(a) - isGlow(b) || a - b,
+		(a, b) =>
+			skin.batches[a].priorityPlane - skin.batches[b].priorityPlane ||
+			isGlow(baseOf[a]) - isGlow(baseOf[b]) ||
+			baseOf[a] - baseOf[b] ||
+			skin.batches[a].materialLayer - skin.batches[b].materialLayer,
 	);
 	for (const i of order) {
 		const sm = skin.submeshes[skin.batches[i].submeshIndex];

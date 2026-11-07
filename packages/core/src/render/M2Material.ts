@@ -25,7 +25,7 @@ import { M2BlendMode, M2MaterialFlags } from "../formats/m2.js";
 export const enum TexCoordSource {
 	Uv0 = 0,
 	Uv1 = 1,
-	/** Sphere-mapped from the view-space normal. */
+	/** Sphere-mapped from the camera-space reflection vector. */
 	Env = 2,
 }
 
@@ -180,7 +180,13 @@ varying vec3 vLightFront;
 varying vec3 vLightBack;
 
 vec2 texCoord(int src, vec3 n) {
-  if (src == 2) return vec2(n.x * 0.5 + 0.5, 0.5 - n.y * 0.5);
+  // The client's GxTexGen_SphereMap feeds D3D the camera-space *reflection* vector, not the normal,
+  // and halves and recentres it. Taking the normal alone holds the sample still across a flat
+  // surface, which is what turns a weapon's sweeping specular streak into an even wash of grey.
+  if (src == 2) {
+    vec3 r = reflect(normalize(vViewPos), n);
+    return vec2(r.x * 0.5 + 0.5, 0.5 - r.y * 0.5);
+  }
 #ifdef USE_UV1
   if (src == 1) return uv1;
 #endif

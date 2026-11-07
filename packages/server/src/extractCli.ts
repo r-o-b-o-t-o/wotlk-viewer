@@ -19,7 +19,7 @@ parser.add_argument("--client", {
 parser.add_argument("--out", {
 	metavar: "<dir>",
 	default: envClient,
-	help: "Where to write Data/ and Data/<locale>/ (default: WOW_CLIENT_DIR)",
+	help: "Where to write the extracted tree (default: WOW_CLIENT_DIR)",
 });
 parser.add_argument("--locale", { metavar: "<code>", help: "Four-letter locale (default: detected from Data/)" });
 parser.add_argument("--clean", { action: "store_true", help: "Delete the output directory first" });

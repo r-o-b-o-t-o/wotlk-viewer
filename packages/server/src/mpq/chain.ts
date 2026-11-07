@@ -4,11 +4,11 @@ import { join } from "node:path";
 /**
  * One archive in the client's search chain, and the directory its contents belong in. Locale
  * archives live in `Data/<locale>/` and address their files from there, so their contents are
- * written back under that same folder.
+ * written back under a folder of that locale's name.
  */
 export interface ChainEntry {
 	path: string;
-	/** Output subdirectory relative to the extract root: `Data` or `Data/<locale>`. */
+	/** Output subdirectory relative to the extract root: empty for a base archive, the locale for a locale one. */
 	outDir: string;
 }
 
@@ -72,8 +72,8 @@ export async function archiveChain(dataDir: string, locale: string): Promise<Cha
 	// Pass one of PatchFiles: both wildcard patterns, then sorted descending as one list.
 	const inLocaleWildcard = wildcardLocale(locale);
 	const wildcard = [
-		...inRoot.filter((n) => WILDCARD_BASE.test(n)).map((n) => entry(dataDir, n, "Data")),
-		...inLocale.filter((n) => inLocaleWildcard.test(n)).map((n) => entry(localeDir, n, `Data/${locale}`)),
+		...inRoot.filter((n) => WILDCARD_BASE.test(n)).map((n) => entry(dataDir, n, null)),
+		...inLocale.filter((n) => inLocaleWildcard.test(n)).map((n) => entry(localeDir, n, locale)),
 	].sort((a, b) => (a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0));
 
 	const fixed = FIXED_PATCHES.map((name) => resolve(dataDir, localeDir, locale, name));
@@ -86,17 +86,27 @@ export async function archiveChain(dataDir: string, locale: string): Promise<Cha
 interface Candidate extends ChainEntry {
 	sortKey: string;
 	fileName: string;
+	inLocaleDir: boolean;
 }
 
-function entry(dir: string, fileName: string, outDir: string): Candidate {
-	// The client sorts the path it built, locale folder included, so the key carries it too.
-	return { path: join(dir, fileName), outDir, fileName, sortKey: `${outDir}/${fileName}`.toUpperCase() };
+/** `locale` is the locale folder the archive sits in, or null for one directly under `Data`. */
+function entry(dir: string, fileName: string, locale: string | null): Candidate {
+	// The client sorts the path it built under Data, locale folder included, so the key carries it
+	// too — it decides patch precedence and must not follow the output layout.
+	const clientPath = locale === null ? `Data/${fileName}` : `Data/${locale}/${fileName}`;
+	return {
+		path: join(dir, fileName),
+		outDir: locale ?? "",
+		fileName,
+		inLocaleDir: locale !== null,
+		sortKey: clientPath.toUpperCase(),
+	};
 }
 
 function resolve(dataDir: string, localeDir: string, locale: string, template: string): Candidate {
 	const name = template.replace(/\*\*\*\*/g, locale);
 	const slash = name.indexOf("/");
-	return slash < 0 ? entry(dataDir, name, "Data") : entry(localeDir, name.slice(slash + 1), `Data/${locale}`);
+	return slash < 0 ? entry(dataDir, name, null) : entry(localeDir, name.slice(slash + 1), locale);
 }
 
 function dedupe(entries: Candidate[]): Candidate[] {
@@ -110,7 +120,7 @@ function dedupe(entries: Candidate[]): Candidate[] {
 }
 
 function exists(e: Candidate, inRoot: string[], inLocale: string[]): boolean {
-	const pool = e.outDir === "Data" ? inRoot : inLocale;
+	const pool = e.inLocaleDir ? inLocale : inRoot;
 	return pool.some((n) => n.toLowerCase() === e.fileName.toLowerCase());
 }
 

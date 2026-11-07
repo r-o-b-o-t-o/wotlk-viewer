@@ -46,19 +46,34 @@ export class FileResolver {
 	}
 }
 
+/** Locale folder names a 3.3.5a client ships. Matched by name because `Item` is four letters too. */
+const LOCALES = new Set([
+	"enus",
+	"engb",
+	"encn",
+	"entw",
+	"frfr",
+	"dede",
+	"eses",
+	"esmx",
+	"itit",
+	"ptbr",
+	"ptpt",
+	"ruru",
+	"kokr",
+	"zhcn",
+	"zhtw",
+]);
+
 /**
- * Default search order inside an extracted client, which mirrors the client's own layout: the
- * locale folders under `Data` first, then `Data` itself. A locale archive outranks the base ones
- * it overlaps, and the extractor already resolved the rest of the precedence by writing each path
- * once, so these two roots are enough.
+ * Default search order inside an extracted client: its locale folders first, then the root. A locale
+ * archive outranks the base ones it overlaps, and the extractor already resolved the rest of the
+ * precedence by writing each path once, so these roots are enough.
  */
 export async function defaultRoots(clientDir: string): Promise<string[]> {
-	const data = (await readdir(clientDir)).find((n) => n.toLowerCase() === "data");
-	if (!data) return [];
-	const dataDir = join(clientDir, data);
-	const locales = (await readdir(dataDir, { withFileTypes: true }))
-		.filter((e) => e.isDirectory() && /^[a-z]{4}$/i.test(e.name))
-		.map((e) => e.name)
+	const locales = (await readdir(clientDir, { withFileTypes: true }).catch(() => []))
+		.filter((e) => e.isDirectory() && LOCALES.has(e.name.toLowerCase()))
+		.map((e) => join(clientDir, e.name))
 		.sort();
-	return [...locales.map((n) => join(dataDir, n)), dataDir];
+	return [...locales, clientDir];
 }

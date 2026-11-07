@@ -4,7 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { archiveChain } from "./chain.js";
 import { MpqArchive } from "./Archive.js";
 import { explode } from "./explode.js";
-import { detectLocale } from "./extractClient.js";
+import { detectLocale, extractClient } from "./extractClient.js";
 
 describe("explode", () => {
 	it("decodes the reference DCL stream", () => {
@@ -12,6 +12,15 @@ describe("explode", () => {
 		// without it the decoder would go out the door unexercised.
 		const input = Buffer.from([0x00, 0x04, 0x82, 0x24, 0x25, 0x8f, 0x80, 0x7f]);
 		expect(explode(input, 13).toString("latin1")).toBe("AIAIAIAIAIAIA");
+	});
+});
+
+describe("extractClient", () => {
+	it("refuses to write into the client install itself", async () => {
+		const dir = "C:/Games/WoW";
+		await expect(extractClient({ clientDir: dir, outDir: `${dir}/../WoW` })).rejects.toThrow(
+			/must not be the client install/,
+		);
 	});
 });
 

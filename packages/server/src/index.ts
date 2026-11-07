@@ -17,9 +17,9 @@ export { CharacterDb, FileResolver, defaultRoots };
 // TypeScript sources into Vite config bundles, which Node cannot load.
 
 export interface ServerOptions {
-	/** Directory holding the extracted MPQ contents (e.g. `.../Extracted`, with `Data/` and `Data/enUS/` inside). */
+	/** Directory holding the extracted MPQ contents (e.g. `.../Extracted`, with `DBFilesClient` under `enUS/`). */
 	clientDir: string;
-	/** Search roots, in priority order. Defaults to locale folders followed by `Data`. */
+	/** Search roots, in priority order. Defaults to the locale folders followed by `clientDir`. */
 	roots?: string[];
 	/** URL prefix for client files (default `/data`). */
 	dataPrefix?: string;

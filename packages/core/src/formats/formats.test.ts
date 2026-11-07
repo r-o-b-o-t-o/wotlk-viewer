@@ -9,7 +9,7 @@ import { Dbc } from "./dbc.js";
 
 // Tests run against a real extracted client (WOW_CLIENT_DIR in .env); skipped when it is absent.
 const CLIENT = process.env.WOW_CLIENT_DIR ?? "";
-const hasClient = CLIENT !== "" && existsSync(join(CLIENT, "Data/Character/Human/Male/HumanMale.M2"));
+const hasClient = CLIENT !== "" && existsSync(join(CLIENT, "Character/Human/Male/HumanMale.M2"));
 
 const read = (p: string): ArrayBuffer => {
 	const b = readFileSync(join(CLIENT, p));
@@ -21,8 +21,8 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 	let m2: ReturnType<typeof parseM2>;
 	let skin: ReturnType<typeof parseSkin>;
 	beforeAll(() => {
-		m2 = parseM2(read("Data/Character/Human/Male/HumanMale.M2"));
-		skin = parseSkin(read("Data/Character/Human/Male/HumanMale00.skin"));
+		m2 = parseM2(read("Character/Human/Male/HumanMale.M2"));
+		skin = parseSkin(read("Character/Human/Male/HumanMale00.skin"));
 	});
 
 	it("reads the header", () => {
@@ -84,7 +84,7 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 	});
 
 	it("reads the camera a glue backdrop is composed around", () => {
-		const backdrop = parseM2(read("Data/enUS/Interface/Glues/Models/UI_Human/UI_Human.m2"));
+		const backdrop = parseM2(read("enUS/Interface/Glues/Models/UI_Human/UI_Human.m2"));
 		expect(backdrop.cameras.length).toBe(1);
 		const cam = backdrop.cameras[0];
 		expect((cam.fov * 180) / Math.PI).toBeCloseTo(80);
@@ -95,7 +95,7 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 	});
 
 	it("reads the lights a glue backdrop lights itself with", () => {
-		const backdrop = parseM2(read("Data/enUS/Interface/Glues/Models/UI_NightElf/UI_NightElf.m2"));
+		const backdrop = parseM2(read("enUS/Interface/Glues/Models/UI_NightElf/UI_NightElf.m2"));
 		expect(backdrop.lights.map((l) => l.type)).toEqual([1, 1, 0, 1]);
 		for (const l of backdrop.lights) expect(l.bone).toBeLessThan(backdrop.bones.length);
 		// The bright one sits in the moonwell, whose geometry centres on (-25.7, -6.0, 1.2).
@@ -129,7 +129,7 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 
 describe.skipIf(!hasClient)("BLP decoding", () => {
 	it("decodes a body skin", () => {
-		const img = parseBlp(read("Data/Character/Human/Male/HumanMaleSkin00_00.blp"));
+		const img = parseBlp(read("Character/Human/Male/HumanMaleSkin00_00.blp"));
 		expect(img.width).toBe(512);
 		expect(img.height).toBe(512);
 		expect(img.data.length).toBe(512 * 512 * 4);
@@ -140,7 +140,7 @@ describe.skipIf(!hasClient)("BLP decoding", () => {
 	});
 
 	it("decodes an item texture with alpha", () => {
-		const img = parseBlp(read("Data/ITEM/TEXTURECOMPONENTS/TorsoUpperTexture/Cloth_A_01Black_Chest_TU_M.blp"));
+		const img = parseBlp(read("ITEM/TEXTURECOMPONENTS/TorsoUpperTexture/Cloth_A_01Black_Chest_TU_M.blp"));
 		expect(img.width).toBeGreaterThan(0);
 		expect(img.height).toBeGreaterThan(0);
 	});
@@ -148,7 +148,7 @@ describe.skipIf(!hasClient)("BLP decoding", () => {
 
 describe.skipIf(!hasClient)("DBC parsing", () => {
 	it("reads ChrRaces", () => {
-		const dbc = new Dbc(read("Data/enUS/DBFilesClient/ChrRaces.dbc"));
+		const dbc = new Dbc(read("enUS/DBFilesClient/ChrRaces.dbc"));
 		expect(dbc.fieldCount).toBe(69);
 		expect(dbc.uint(0, 0)).toBe(1);
 		expect(dbc.string(0, 6)).toBe("Hu");

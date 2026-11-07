@@ -30,8 +30,9 @@ npm run dev
 
 ### Extracting the client
 
-`npm run extract -w packages/server` unpacks the MPQ archives into `WOW_CLIENT_DIR`, laid out as the client reads
-them: base archives into `Data/`, locale ones into `Data/<locale>/`.
+`npm run extract -w packages/server` unpacks the MPQ archives into `WOW_CLIENT_DIR`, laid out as the client
+addresses them from inside `Data`: the base archives' contents at the root, the locale ones under `<locale>/`. The
+output directory has to be somewhere other than the client install itself.
 
 It walks the archives in the client's own search order, so a file replaced by a late patch wins over the original.
 That ordering is the point: tools that unpack archive by archive in directory order leave pre-patch copies in place,
@@ -40,7 +41,7 @@ emitter `patch.MPQ` adds to it.
 
 ```
 --client <dir>   Client install holding Data/ (default: the parent of WOW_CLIENT_DIR)
---out <dir>      Where to write Data/ and Data/<locale>/ (default: WOW_CLIENT_DIR)
+--out <dir>      Where to write the extracted tree (default: WOW_CLIENT_DIR)
 --locale <code>  Four-letter locale (default: detected from Data/)
 --clean          Delete the output directory first
 --jobs <n>       Files read at once from one archive (default 8)
@@ -48,7 +49,7 @@ emitter `patch.MPQ` adds to it.
 ```
 
 Already have an extract from another tool? It works as long as the layout matches and the precedence is right; the
-`Data/<locale>/` folder is what holds `DBFilesClient`.
+`<locale>/` folder is what holds `DBFilesClient`.
 
 Other scripts: `npm test` (Vitest, parser and DBC tests run against the real client and are skipped when it is absent),
 `npm run typecheck`, `npm run build`, `npm run format` (Prettier, config in `.prettierrc`). Commit messages follow
@@ -179,7 +180,7 @@ await startServer({
 
 Endpoints:
 
-- `GET /data/<client path>` — raw file, case-insensitive, locale folders searched before `Data`. `?exists` answers
+- `GET /data/<client path>` — raw file, case-insensitive, locale folders searched before the root. `?exists` answers
   200/204 without a body (used for cheap existence probes).
 - `GET /api/characters?name=<prefix>&limit=20` — `{ guid, name, race, class, gender, level }[]`
 - `GET /api/characters/<guid>` — the above plus `skin, face, hairStyle, hairColor, facialStyle` and

@@ -1,12 +1,12 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { archiveChain } from "./chain.js";
 import { MpqArchive, UnsupportedCompression, type MpqFile } from "./Archive.js";
 
 export interface ExtractOptions {
 	/** Client install root: the folder holding `Data`. */
 	clientDir: string;
-	/** Where the extracted tree goes; it ends up holding `Data` and `Data/<locale>`. */
+	/** Where the extracted tree goes; the base archives' contents land in it, the locale ones in `<locale>`. */
 	outDir: string;
 	/** Four-letter locale. Detected from the archives in `Data` when omitted. */
 	locale?: string;
@@ -40,8 +40,8 @@ export interface ExtractResult {
 const PROGRESS_EVERY = 2000;
 
 /**
- * Extracts a client's archives into `outDir`, mirroring the layout the client reads: base archives
- * land in `Data`, locale ones in `Data/<locale>`.
+ * Extracts a client's archives into `outDir`: the base archives' contents at its root and the locale
+ * ones under `<locale>`, which is how the client addresses them from inside `Data`.
  *
  * Archives are walked highest priority first and the first archive to claim a path wins, so a file
  * patched late in the client's life replaces the original rather than the other way round. That
@@ -49,6 +49,10 @@ const PROGRESS_EVERY = 2000;
  * pre-patch models, which looks like a renderer bug rather than stale data.
  */
 export async function extractClient(options: ExtractOptions): Promise<ExtractResult> {
+	// Writing at the client's own root would scatter extracted files among the archives.
+	if (resolve(options.clientDir) === resolve(options.outDir))
+		throw new Error(`The output directory must not be the client install itself (${resolve(options.outDir)})`);
+
 	const dataDir = join(options.clientDir, "Data");
 	const locale = options.locale ?? (await detectLocale(dataDir));
 	const chain = await archiveChain(dataDir, locale);

@@ -30,8 +30,8 @@ All game data is local; nothing calls an online service. Every package reads one
 (gitignored) — copy `.env.example` to create it. Vite and Vitest load it through `loadEnv`, the
 server CLI through `--env-file-if-exists`.
 
-- `WOW_CLIENT_DIR` — extracted client, laid out as the client is: `Data` with the base archives'
-  contents and `Data/<locale>` inside it for the locale ones (that is where `DBFilesClient` lives).
+- `WOW_CLIENT_DIR` — extracted client: the base archives' contents at its root and `<locale>` for
+  the locale ones (that is where `DBFilesClient` lives), as the client addresses them from `Data`.
   File name case is inconsistent, so resolve paths case-insensitively.
   `npm run extract -w packages/server` builds it from the MPQs in the client's own search order.
   An extract built in archive-file order serves pre-patch copies of ~1% of files, which reads as a

@@ -46,10 +46,19 @@ export class FileResolver {
 	}
 }
 
-/** Default search order inside an extracted client: locale folders first, then the base data. */
+/**
+ * Default search order inside an extracted client, which mirrors the client's own layout: the
+ * locale folders under `Data` first, then `Data` itself. A locale archive outranks the base ones
+ * it overlaps, and the extractor already resolved the rest of the precedence by writing each path
+ * once, so these two roots are enough.
+ */
 export async function defaultRoots(clientDir: string): Promise<string[]> {
-	const names = await readdir(clientDir);
-	const locales = names.filter((n) => /^data_[a-z]{4}$/i.test(n)).sort();
-	const base = names.filter((n) => n.toLowerCase() === "data");
-	return [...locales, ...base].map((n) => join(clientDir, n));
+	const data = (await readdir(clientDir)).find((n) => n.toLowerCase() === "data");
+	if (!data) return [];
+	const dataDir = join(clientDir, data);
+	const locales = (await readdir(dataDir, { withFileTypes: true }))
+		.filter((e) => e.isDirectory() && /^[a-z]{4}$/i.test(e.name))
+		.map((e) => e.name)
+		.sort();
+	return [...locales.map((n) => join(dataDir, n)), dataDir];
 }

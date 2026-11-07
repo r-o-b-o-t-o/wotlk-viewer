@@ -84,7 +84,7 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 	});
 
 	it("reads the camera a glue backdrop is composed around", () => {
-		const backdrop = parseM2(read("Data_enUS/Interface/Glues/Models/UI_Human/UI_Human.m2"));
+		const backdrop = parseM2(read("Data/enUS/Interface/Glues/Models/UI_Human/UI_Human.m2"));
 		expect(backdrop.cameras.length).toBe(1);
 		const cam = backdrop.cameras[0];
 		expect((cam.fov * 180) / Math.PI).toBeCloseTo(80);
@@ -95,7 +95,7 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 	});
 
 	it("reads the lights a glue backdrop lights itself with", () => {
-		const backdrop = parseM2(read("Data_enUS/Interface/Glues/Models/UI_NightElf/UI_NightElf.m2"));
+		const backdrop = parseM2(read("Data/enUS/Interface/Glues/Models/UI_NightElf/UI_NightElf.m2"));
 		expect(backdrop.lights.map((l) => l.type)).toEqual([1, 1, 0, 1]);
 		for (const l of backdrop.lights) expect(l.bone).toBeLessThan(backdrop.bones.length);
 		// The bright one sits in the moonwell, whose geometry centres on (-25.7, -6.0, 1.2).
@@ -148,7 +148,7 @@ describe.skipIf(!hasClient)("BLP decoding", () => {
 
 describe.skipIf(!hasClient)("DBC parsing", () => {
 	it("reads ChrRaces", () => {
-		const dbc = new Dbc(read("Data_enUS/DBFilesClient/ChrRaces.dbc"));
+		const dbc = new Dbc(read("Data/enUS/DBFilesClient/ChrRaces.dbc"));
 		expect(dbc.fieldCount).toBe(69);
 		expect(dbc.uint(0, 0)).toBe(1);
 		expect(dbc.string(0, 6)).toBe("Hu");

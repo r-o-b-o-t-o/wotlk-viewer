@@ -16,17 +16,38 @@ from an extracted game client and assembles fully equipped player characters.
 
 ## Getting started
 
-Requirements: Node 22+, an extracted 3.3.5a client (a folder containing `Data` and `Data_<locale>` subfolders with the
-MPQ contents), optionally an AzerothCore `characters` database.
+Requirements: Node 22+, a 3.3.5a client, optionally an AzerothCore `characters` database.
 
-Copy `.env.example` to `.env` and point `WOW_CLIENT_DIR` at your extracted client (`WOW_DB_URL` is optional;
-without it the demo runs without the character API). Every package reads that one file.
+Copy `.env.example` to `.env` and point `WOW_CLIENT_DIR` at where your extracted client should live (`WOW_DB_URL` is
+optional; without it the demo runs without the character API). Every package reads that one file.
 
 ```bash
 cp .env.example .env
 npm install
+npm run extract -w packages/server -- --client /path/to/wow --clean
 npm run dev
 ```
+
+### Extracting the client
+
+`npm run extract -w packages/server` unpacks the MPQ archives into `WOW_CLIENT_DIR`, laid out as the client reads
+them: base archives into `Data/`, locale ones into `Data/<locale>/`.
+
+It walks the archives in the client's own search order, so a file replaced by a late patch wins over the original.
+That ordering is the point: tools that unpack archive by archive in directory order leave pre-patch copies in place,
+and the result looks like a rendering bug rather than stale data — Hailstorm's blade, for one, loses the particle
+emitter `patch.MPQ` adds to it.
+
+```
+--client <dir>   Client install holding Data/ (default: the parent of WOW_CLIENT_DIR)
+--out <dir>      Where to write Data/ and Data/<locale>/ (default: WOW_CLIENT_DIR)
+--locale <code>  Four-letter locale (default: detected from Data/)
+--clean          Delete the output directory first
+--jobs <n>       Files read at once from one archive (default 8)
+```
+
+Already have an extract from another tool? It works as long as the layout matches and the precedence is right; the
+`Data/<locale>/` folder is what holds `DBFilesClient`.
 
 Other scripts: `npm test` (Vitest, parser and DBC tests run against the real client and are skipped when it is absent),
 `npm run typecheck`, `npm run build`, `npm run format` (Prettier, config in `.prettierrc`). Commit messages follow
@@ -205,6 +226,11 @@ quaternion and scale tracks, global sequences, external `.anim` files loaded on 
 ## Known limitations and edge cases
 
 Things deliberately left out or approximated; worth deciding on if they matter for your use case:
+
+- The extractor decodes zlib and PKWARE-imploded sectors, which covers all but 8 files of a 3.3.5a client; those 8
+  use bzip2 (six `.skin` files, two `.blp`). A run lists what it skipped and why.
+- It also leaves out `base-<locale>.MPQ` and `backup-<locale>.MPQ`, which hold the installer's own files and are not
+  in the client's search chain.
 
 - Particle emitters use a simplified CPU simulation: head and tail quads with spin, but no tumble, wind or spline
   emitters. The head/tail choice comes from the `HeadStyle` and `TailStyle` flags,

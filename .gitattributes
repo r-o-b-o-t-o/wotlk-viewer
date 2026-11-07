@@ -1,0 +1,3 @@
+# Check out LF everywhere. Prettier is configured with endOfLine "lf", so a Windows checkout under
+# core.autocrlf=true otherwise fails `prettier --check` on every file git has just written.
+* text=auto eol=lf

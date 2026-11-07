@@ -65,11 +65,19 @@ export async function createMiddleware(opts: ServerOptions): Promise<Middleware>
 					return res.end();
 				}
 				if (!file) return json(res, 404, { error: "not found" });
-				const size = (await stat(file)).size;
+				const { size, mtimeMs } = await stat(file);
+				// Revalidate rather than expire: re-extracting the client replaces these files in place,
+				// and a stale copy served for hours looks like a renderer bug. The 304 keeps it cheap.
+				const etag = `"${mtimeMs.toString(36)}-${size.toString(36)}"`;
+				if (req.headers["if-none-match"] === etag) {
+					res.writeHead(304, { ETag: etag, "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" });
+					return res.end();
+				}
 				res.writeHead(200, {
 					"Content-Type": "application/octet-stream",
 					"Content-Length": size,
-					"Cache-Control": "public, max-age=86400",
+					"Cache-Control": "no-cache",
+					ETag: etag,
 					"Access-Control-Allow-Origin": "*",
 				});
 				if (req.method === "HEAD") return res.end();

@@ -15,6 +15,7 @@
 	},
 	"dependencies": {
 		"@wotlk-viewer/core": "*",
+		"argparse": "^3.0.4",
 		"mysql2": "^3.14.0"
 	},
 	"devDependencies": {

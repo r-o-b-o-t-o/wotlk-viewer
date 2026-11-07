@@ -1,51 +1,53 @@
+import { ArgumentParser } from "argparse";
 import { rm, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { extractClient } from "./mpq/extractClient.js";
 
 // Extracts a client's MPQ archives in the order the client reads them. Reads WOW_CLIENT_DIR;
 // `npm run extract -w packages/server` loads it from .env.
-const USAGE = `Usage: extract-client [options]
-
-  --client <dir>   Client install holding Data/ (default: the parent of WOW_CLIENT_DIR)
-  --out <dir>      Where to write Data/ and Data/<locale>/ (default: WOW_CLIENT_DIR)
-  --locale <code>  Four-letter locale (default: detected from Data/)
-  --clean          Delete the output directory first
-  --jobs <n>       Files read at once from one archive (default 8)
-`;
-
-function parse(argv: string[]): Map<string, string> {
-	const out = new Map<string, string>();
-	for (let i = 0; i < argv.length; i++) {
-		const arg = argv[i];
-		if (!arg.startsWith("--")) throw new Error(`Unexpected argument ${arg}`);
-		const name = arg.slice(2);
-		if (name === "clean" || name === "help") out.set(name, "true");
-		else {
-			const value = argv[++i];
-			if (value === undefined) throw new Error(`${arg} needs a value`);
-			out.set(name, value);
-		}
-	}
-	return out;
-}
-
-const args = parse(process.argv.slice(2));
-if (args.has("help")) {
-	console.log(USAGE);
-	process.exit(0);
-}
-
 const envClient = process.env.WOW_CLIENT_DIR;
-const outDir = args.get("out") ?? envClient;
-const clientDir = args.get("client") ?? (envClient ? dirname(envClient) : undefined);
-if (!outDir || !clientDir) {
-	console.error("Set WOW_CLIENT_DIR, or pass --client and --out.\n\n" + USAGE);
-	process.exit(1);
+
+const parser = new ArgumentParser({
+	prog: "extract-client",
+	description: "Extract a WoW client's MPQ archives in the order the client reads them.",
+});
+parser.add_argument("--client", {
+	metavar: "<dir>",
+	default: envClient && dirname(envClient),
+	help: "Client install holding Data/ (default: the parent of WOW_CLIENT_DIR)",
+});
+parser.add_argument("--out", {
+	metavar: "<dir>",
+	default: envClient,
+	help: "Where to write Data/ and Data/<locale>/ (default: WOW_CLIENT_DIR)",
+});
+parser.add_argument("--locale", { metavar: "<code>", help: "Four-letter locale (default: detected from Data/)" });
+parser.add_argument("--clean", { action: "store_true", help: "Delete the output directory first" });
+parser.add_argument("--jobs", { metavar: "<n>", type: "int", help: "Files read at once from one archive (default 8)" });
+
+interface Args {
+	client?: string;
+	out?: string;
+	locale?: string;
+	clean: boolean;
+	jobs?: number;
 }
+
+const args = parser.parse_args() as Args;
+
+// `parser.error` exits, but argparse does not type it as never.
+function required(value: string | undefined): string {
+	if (value) return value;
+	parser.error("set WOW_CLIENT_DIR, or pass --client and --out");
+	process.exit(2);
+}
+
+const clientDir = required(args.client);
+const outDir = required(args.out);
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
 
-if (args.has("clean")) {
+if (args.clean) {
 	const existing = await stat(outDir).catch(() => null);
 	if (existing) {
 		console.log(`Removing ${resolve(outDir)}`);
@@ -57,10 +59,14 @@ const started = Date.now();
 const result = await extractClient({
 	clientDir,
 	outDir,
-	locale: args.get("locale"),
-	concurrency: args.has("jobs") ? Number(args.get("jobs")) : undefined,
+	locale: args.locale,
+	concurrency: args.jobs,
 	onProgress: (p) =>
 		process.stdout.write(`\r[${p.index}/${p.total}] ${p.written} files, ${mb(p.bytes)}${" ".repeat(10)}`),
+}).catch((error: unknown) => {
+	// A wrong --client is the likely failure here, and a stack trace says nothing about it.
+	console.error(`\n${error instanceof Error ? error.message : error}`);
+	process.exit(1);
 });
 
 process.stdout.write("\n");

@@ -44,6 +44,7 @@ emitter `patch.MPQ` adds to it.
 --locale <code>  Four-letter locale (default: detected from Data/)
 --clean          Delete the output directory first
 --jobs <n>       Files read at once from one archive (default 8)
+-h, --help       Print this list
 ```
 
 Already have an extract from another tool? It works as long as the layout matches and the precedence is right; the

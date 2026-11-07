@@ -141,7 +141,9 @@ vec3 m2Light(vec3 n, vec3 viewPos) {
     float atten = 1.0 / (0.7 * dist + 0.03 * dist * dist);
     light += uPointColor[i] * atten * max(dot(n, toLight / dist), 0.0);
   }
-  return min(light, vec3(1.0));
+  // The hardware clamps a vertex colour both ways, and a folded light set can carry a channel below
+  // zero: CShaderEffect::SetLocalLighting clamps the sun it hands the shader at the top alone.
+  return clamp(light, vec3(0.0), vec3(1.0));
 }
 `;
 

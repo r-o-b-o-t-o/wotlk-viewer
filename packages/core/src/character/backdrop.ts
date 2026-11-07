@@ -109,18 +109,73 @@ export interface Backdrop {
 	lighting: BackdropLighting;
 }
 
-/** Sums the ambient a scene's rows contribute and keeps the ones that also light a direction. */
-function backdropLighting(name: BackdropScene): BackdropLighting {
-	const rows = BACKDROP_LIGHTS[name];
+/** Rec. 709 luminance weights, as `CM2Lighting::AddDiffuse` weighs a light's direction by. */
+const LUMINANCE = [0.212671, 0.71516, 0.072169];
+
+/**
+ * The one sun and ambient term the client shades a scene with. `CM2Lighting` keeps no array of
+ * directional lights: `AddLight` sums their ambient and accumulates their diffuse, and
+ * `SetupSunlight` folds that into a single light pointing along their luminance-weighted sum,
+ * handing the part of each colour that direction misses back as ambient. Summing the rows as
+ * separate lights instead lights a surface several times over, which comes out brighter and tinted
+ * towards whichever of them faces it.
+ *
+ * The fold is all dot products and a normalize, so running it on the client's own directions gives
+ * the same sun as running it in view space, where `AddDiffuse` puts them — the viewer carries the
+ * result into that space itself.
+ */
+export function backdropLighting(name: BackdropScene): BackdropLighting {
 	const ambient: [number, number, number] = [0, 0, 0];
-	const lights: BackdropLighting["lights"] = [];
-	for (const row of rows) {
+	// Per channel, every light's direction scaled by how much of that channel it carries; `weighted`
+	// is the same sum taken over luminance, and `total` the plain sum of the diffuse colours.
+	const perChannel = [
+		[0, 0, 0],
+		[0, 0, 0],
+		[0, 0, 0],
+	];
+	const weighted = [0, 0, 0];
+	const total = [0, 0, 0];
+	for (const row of BACKDROP_LIGHTS[name]) {
 		if (!row[0]) continue;
+		// `CM2Light::SetDirection` normalizes, and the fold weighs a direction by its length.
+		const dir = normalize([row[2], row[3], row[4]]);
 		for (let i = 0; i < 3; i++) ambient[i] += row[5] * row[6 + i];
-		const color: [number, number, number] = [row[9] * row[10], row[9] * row[11], row[9] * row[12]];
-		if (color.some((c) => c > 0)) lights.push({ direction: [row[2], row[3], row[4]], color });
+		const color = [row[9] * row[10], row[9] * row[11], row[9] * row[12]];
+		const lum = color.reduce((sum, c, ch) => sum + c * LUMINANCE[ch], 0);
+		for (let i = 0; i < 3; i++) {
+			weighted[i] += dir[i] * lum;
+			for (let ch = 0; ch < 3; ch++) perChannel[ch][i] += dir[i] * color[ch];
+		}
+		for (let ch = 0; ch < 3; ch++) total[ch] += color[ch];
 	}
+
+	// Lights that cancel each other out leave no direction to point the sun along. The client falls
+	// back to one shining away from the camera, which is a direction in view space and so not ours
+	// to give; no scene it ships comes near the case, every one of them being lit from a single side.
+	const direction = normalize(weighted, [0, 0, -1]);
+	const color: [number, number, number] = [0, 0, 0];
+	for (let ch = 0; ch < 3; ch++) {
+		const along = direction.reduce((sum, d, i) => sum + d * perChannel[ch][i], 0);
+		// The client's own numbers: a quarter of what the sun's direction misses moves to ambient, and
+		// the sun keeps the rest, scaled back up. `CShaderEffect::SetLocalLighting` then clamps the
+		// sun, and the ambient never needs it — a light contributes no more along the sun than in all.
+		color[ch] = Math.min(1.25 * along - 0.25 * total[ch], 1);
+		ambient[ch] += 0.25 * (total[ch] - along);
+	}
+
+	const lights: BackdropLighting["lights"] = color.some((c) => c !== 0) ? [{ direction, color }] : [];
 	return { ambient, lights, fog: BACKDROP_FOG[name] };
+}
+
+/**
+ * `v` at unit length, or `fallback` where it is too short to have a direction at all —
+ * `C3Vector::NormalizeSafe` hands such a vector back untouched, which is this function's default.
+ */
+function normalize(v: number[], fallback: [number, number, number] = [v[0], v[1], v[2]]): [number, number, number] {
+	const lengthSq = v[0] ** 2 + v[1] ** 2 + v[2] ** 2;
+	if (lengthSq <= 1e-5) return fallback;
+	const length = Math.sqrt(lengthSq);
+	return [v[0] / length, v[1] / length, v[2] / length];
 }
 
 /** Builds the character-creation scene the client shows behind a character of a given race. */

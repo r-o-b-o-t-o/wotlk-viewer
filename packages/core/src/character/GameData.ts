@@ -292,12 +292,18 @@ export class GameData {
 	}
 
 	/**
-	 * The ItemVisuals row a held item shows: its enchant's, and otherwise the one the appearance
-	 * carries itself, which is where an item that glows unenchanted keeps its effect. The client
-	 * picks between the two the same way, in `CCharacterComponent::AddHandItem`. Only held items get
-	 * the appearance's own visual; a helm or shoulder shows an enchant's and nothing else.
+	 * The ItemVisuals row a held item shows. The appearance's own row wins over the enchant's, so an
+	 * item that glows unenchanted keeps its own effect and hides the enchant's: in the client,
+	 * `CGItem_C::GetItemEnchantmentVisualID` returns "leave it alone" once the appearance's
+	 * `itemVisualId` resolves to a row, and only otherwise looks at the enchant. The id has to
+	 * resolve: 250 appearances name a row ItemVisuals.dbc does not hold, and those do show the
+	 * enchant. Only held items get the appearance's own visual; a helm or shoulder shows an
+	 * enchant's and nothing else.
 	 */
 	async heldItemVisual(enchantId: number, display: ItemDisplayInfo): Promise<number> {
+		if (display.itemVisualId && (await this.itemVisuals()).has(display.itemVisualId)) {
+			return display.itemVisualId;
+		}
 		const enchant = enchantId ? (await this.spellItemEnchantments()).get(enchantId) : undefined;
 		return enchant?.itemVisualId || display.itemVisualId;
 	}

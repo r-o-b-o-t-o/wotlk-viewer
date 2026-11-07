@@ -16,9 +16,11 @@
 	"dependencies": {
 		"@wotlk-viewer/core": "*",
 		"argparse": "^3.0.4",
+		"cli-progress": "^3.12.0",
 		"mysql2": "^3.14.0"
 	},
 	"devDependencies": {
+		"@types/cli-progress": "^3.11.6",
 		"tsx": "^4.20.0"
 	}
 }

@@ -1,6 +1,7 @@
 import { ArgumentParser } from "argparse";
+import { SingleBar } from "cli-progress";
 import { rm, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { extractClient } from "./mpq/extractClient.js";
 
 // Extracts a client's MPQ archives in the order the client reads them. Reads WOW_CLIENT_DIR;
@@ -55,21 +56,43 @@ if (args.clean) {
 	}
 }
 
+const bar = new SingleBar({
+	format: "[{bar}] {value}/{total} archives | {files} files | {size} | {archive}",
+	// Block glyphs come out as mojibake in a Windows console that is not on a UTF-8 code page.
+	barCompleteChar: "=",
+	barIncompleteChar: "-",
+	// Progress still shows when the output is a pipe or a terminal that ignores a bare \r.
+	noTTYOutput: true,
+	notTTYSchedule: 5000,
+	hideCursor: true,
+});
+
 const started = Date.now();
+let running = false;
 const result = await extractClient({
 	clientDir,
 	outDir,
 	locale: args.locale,
 	concurrency: args.jobs,
-	onProgress: (p) =>
-		process.stdout.write(`\r[${p.index}/${p.total}] ${p.written} files, ${mb(p.bytes)}${" ".repeat(10)}`),
+	onProgress: (p) => {
+		if (!running) {
+			bar.start(p.total, 0, { files: 0, size: mb(0), archive: "" });
+			running = true;
+		}
+		bar.update(p.finished ? p.index : Math.max(0, p.index - 1), {
+			files: p.written,
+			size: mb(p.bytes),
+			archive: p.archive === "" ? "" : basename(p.archive),
+		});
+	},
 }).catch((error: unknown) => {
 	// A wrong --client is the likely failure here, and a stack trace says nothing about it.
+	bar.stop();
 	console.error(`\n${error instanceof Error ? error.message : error}`);
 	process.exit(1);
 });
+bar.stop();
 
-process.stdout.write("\n");
 console.log(`\nLocale ${result.locale}; archives in priority order:`);
 for (const path of result.archives) console.log(`  ${path}`);
 console.log(

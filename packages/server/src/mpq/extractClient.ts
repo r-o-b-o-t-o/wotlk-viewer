@@ -20,6 +20,8 @@ export interface ExtractProgress {
 	/** Position of the archive in the chain, 1-based. */
 	index: number;
 	total: number;
+	/** Whether this archive is done, as opposed to a report from part-way through it. */
+	finished: boolean;
 	written: number;
 	bytes: number;
 }
@@ -70,6 +72,9 @@ export async function extractClient(options: ExtractOptions): Promise<ExtractRes
 		deleted: 0,
 		skipped,
 	};
+
+	// One report before any work, so a caller's progress display knows the chain length up front.
+	options.onProgress?.({ archive: "", index: 0, total: chain.length, finished: false, written: 0, bytes: 0 });
 
 	const note = (reason: string, path: string) => {
 		const seen = skipped.get(reason) ?? { count: 0, examples: [] };
@@ -130,6 +135,7 @@ export async function extractClient(options: ExtractOptions): Promise<ExtractRes
 						archive: entry.path,
 						index: index + 1,
 						total: chain.length,
+						finished: false,
 						written: result.written,
 						bytes: result.bytes,
 					});
@@ -139,6 +145,7 @@ export async function extractClient(options: ExtractOptions): Promise<ExtractRes
 				archive: entry.path,
 				index: index + 1,
 				total: chain.length,
+				finished: true,
 				written: result.written,
 				bytes: result.bytes,
 			});

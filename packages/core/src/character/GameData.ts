@@ -59,6 +59,7 @@ export interface CharHairGeoset {
 	sex: number;
 	variation: number;
 	geoset: number;
+	/** Parsed for completeness: the client reads the column and never acts on it. */
 	showScalp: boolean;
 }
 

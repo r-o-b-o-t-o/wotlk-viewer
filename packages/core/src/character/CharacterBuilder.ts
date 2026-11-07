@@ -256,7 +256,6 @@ export class CharacterBuilder {
 		}
 
 		// Helmets hide hair / facial geosets per race.
-		let hideHair = false;
 		const head = bySlot.get(EquipmentSlot.Head);
 		if (head) {
 			const vis = helmetVis.get(head.display.helmetGeosetVis[sex]);
@@ -267,10 +266,7 @@ export class CharacterBuilder {
 				const hides = (i: number) => (vis.hideGeoset[i] & bit) !== 0;
 				// Hiding swaps in the group's variant 1 — the capped scalp, the trimmed ears — rather
 				// than dropping the group, which would leave a hole where the helm does not reach.
-				if (hides(0)) {
-					groups.set(GeosetGroup.Hair, 1);
-					hideHair = true;
-				}
+				if (hides(0)) groups.set(GeosetGroup.Hair, 1);
 				if (hides(1)) groups.set(GeosetGroup.Facial1, 1);
 				if (hides(2)) groups.set(GeosetGroup.Facial2, 1);
 				if (hides(3)) groups.set(GeosetGroup.Facial3, 1);
@@ -304,10 +300,10 @@ export class CharacterBuilder {
 		push(faceSec?.textures[1], CharRegion.FaceUpper);
 		push(facialSec?.textures[0], CharRegion.FaceLower);
 		push(facialSec?.textures[1], CharRegion.FaceUpper);
-		if (hair?.showScalp || hideHair || !hair) {
-			push(hairSec?.textures[1], CharRegion.FaceLower);
-			push(hairSec?.textures[2], CharRegion.FaceUpper);
-		}
+		// Unconditional, helm or not: the client ignores ShowScalp, and a troll's sheet paints hair
+		// across the forehead that no geoset reaches.
+		push(hairSec?.textures[1], CharRegion.FaceLower);
+		push(hairSec?.textures[2], CharRegion.FaceUpper);
 		push(underwearSec?.textures[0], CharRegion.PelvisUpper);
 		push(underwearSec?.textures[1], CharRegion.TorsoUpper);
 

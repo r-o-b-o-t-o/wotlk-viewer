@@ -43,6 +43,15 @@ export interface BackdropLighting {
 export const BACKDROP_CHARACTER_ATTACHMENT = 0;
 export const BACKDROP_PET_ATTACHMENT = 1;
 
+/**
+ * Where a backdrop's meshes sit in the render order: below every model that stands in it, attached
+ * items and their visual effects included. Three.js sorts translucent meshes by render order before
+ * depth, so a backdrop left level with the models drew after everything sorted below it, and its own
+ * translucent batches — foliage, mostly — painted over a weapon's glow however far behind it stood.
+ * Standing the whole backdrop first is the trade in the other direction, see "Known limitations".
+ */
+const BACKDROP_RENDER_ORDER = -1000;
+
 /** Share of the pending zoom spent per frame; OrbitControls damps rotation and panning the same way. */
 const ZOOM_DAMPING = 0.08;
 /** Pending zoom below this is not worth another frame of easing. */
@@ -310,6 +319,7 @@ export class Viewer {
 			return this.syncPlacement();
 		}
 		this.backdrop = instance;
+		instance.setRenderOrder(BACKDROP_RENDER_ORDER);
 		this.backdropRoot.add(instance);
 		this.backdropFov = cam.fov;
 		this.backdropCamera.near = cam.nearClip;

@@ -300,6 +300,12 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   viewpoint-dependent order can still stack wrongly. A particle emitter carries its own plane the same way, but
   since the body is one object the plane only orders an emitter against the other emitters and against the body
   as a whole, where the client sorts it against each geometry batch in turn.
+- Across models the same sort key decides it, so a backdrop is drawn before everything standing in it rather than
+  depth-sorted against it: a model's translucent parts always win. The client sorts the lot together, and letting
+  three.js do the same is not on offer — a model and the items on it need their own order, which puts them in a
+  band of their own and so ahead of or behind a backdrop wholesale. Standing the backdrop first is the way round
+  that suits a character-selection screen, where the models stand in front of the scene; translucent scene
+  geometry genuinely nearer than a model, such as a tuft of the Tauren scene's foreground grass, loses to it.
 - The second texture layer's combiner comes from `textureCombinerCombos`, indexed by the batch's shader id. The
   first layer's op is assumed to be a modulate, which holds on all but two of the client's item batches, and the
   Decal, Fade and Envmap ops are not modelled and fall back to a modulate. Batches never carry more than two

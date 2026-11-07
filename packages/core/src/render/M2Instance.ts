@@ -275,9 +275,14 @@ export class M2Instance extends Object3D {
 	 * Seats this instance's meshes at `base`, its emitters nudged off it by their priority plane. The
 	 * client sorts an emitter against the model's geometry by that plane; here the body is a single
 	 * object, so the plane orders emitters among themselves and against the body as a whole.
+	 *
+	 * Attached items follow a step below, and their own visual effects a step below that, so a model
+	 * and everything on it spans `base - 2 .. base`; anything meant to draw behind the lot of them
+	 * needs a base below that.
 	 */
-	private setRenderOrder(base: number): void {
+	setRenderOrder(base: number): void {
 		this.mesh.renderOrder = base;
+		for (const { instance } of this.attached) instance.setRenderOrder(base - 1);
 		for (const ps of this.particles) {
 			// Only the emitters the client sorts by plane take one. The two blend modes it sends to the
 			// opaque pass instead are sorted there by their material, depth deciding the picture, so they

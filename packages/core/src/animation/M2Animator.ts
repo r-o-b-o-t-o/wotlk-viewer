@@ -262,15 +262,27 @@ const bbX = new Vector3(),
 	bbZ = new Vector3(),
 	bbPivot = new Vector3();
 
-/** Removes the component of `v` along unit vector `axis` and normalizes. */
-function projectOut(v: Vector3, axis: Vector3): Vector3 {
-	return v.addScaledVector(axis, -v.dot(axis)).normalize();
+/**
+ * `axis` crossed with the direction towards the camera, normalized: the one axis of a cylindrical
+ * billboard that the client works out, the third being a cross of the two. Looking straight down the
+ * locked axis leaves no such direction, so the camera's up stands in rather than leaving a zero row.
+ */
+function acrossView(out: Vector3, axis: Vector3, basis: BillboardBasis): Vector3 {
+	out.crossVectors(axis, basis.back);
+	if (out.lengthSq() < 1e-12) out.crossVectors(axis, basis.up);
+	return out.normalize();
 }
 
 /**
  * Re-orients a billboarded bone (scale and pivot position are kept). Spherical: X faces the camera,
- * Y = camera right, Z = camera up, matching WoW's X-forward / Z-up bone space. Cylindrical variants keep
- * the locked axis and turn around it towards the camera.
+ * Y = camera right, Z = camera up, matching WoW's X-forward / Z-up bone space.
+ *
+ * A cylindrical variant keeps its locked axis and turns the other two around it, as `AnimateBones`
+ * does: first the axis across the view, the locked one crossed with the view direction, then a cross
+ * of those two for the third, which lands along the view. So a lock on X or Y turns the bone's Z to
+ * the camera, and a lock on Z turns X the way the spherical case does. The way that axis points is
+ * the client's too, and settles which face of a one-sided batch is seen: away from the camera for a
+ * lock on X or Y, towards it for a lock on Z.
  */
 function applyBillboard(world: Matrix4, pivot: [number, number, number], basis: BillboardBasis, flags: number): void {
 	const e = world.elements;
@@ -281,15 +293,16 @@ function applyBillboard(world: Matrix4, pivot: [number, number, number], basis: 
 	bbPivot.set(pivot[0], pivot[1], pivot[2]).applyMatrix4(world);
 	if (flags & M2BoneFlags.CylindricalBillboardZ) {
 		bbZ.set(e[8], e[9], e[10]).normalize();
-		projectOut(bbX.copy(basis.back), bbZ);
-		bbY.crossVectors(bbZ, bbX);
+		acrossView(bbY, bbZ, basis);
+		bbX.crossVectors(bbY, bbZ);
 	} else if (flags & M2BoneFlags.CylindricalBillboardX) {
 		bbX.set(e[0], e[1], e[2]).normalize();
-		projectOut(bbZ.copy(basis.up), bbX);
-		bbY.crossVectors(bbZ, bbX);
+		acrossView(bbY, bbX, basis);
+		bbZ.crossVectors(bbX, bbY);
 	} else if (flags & M2BoneFlags.CylindricalBillboardY) {
 		bbY.set(e[4], e[5], e[6]).normalize();
-		projectOut(bbX.copy(basis.back), bbY);
+		// Alone among the three, the client crosses this pair the other way round; hence the flip.
+		acrossView(bbX, bbY, basis).negate();
 		bbZ.crossVectors(bbX, bbY);
 	} else {
 		bbX.copy(basis.back);

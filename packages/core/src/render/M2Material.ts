@@ -247,6 +247,10 @@ void main() {
  * An "NA" variant leaves the second layer's alpha out of the result, and the three `Alpha` ones at
  * the end are the specialized shaders a folded multi-layer material lands on. A one-texture shader
  * ignores `t1`, which is the white placeholder for want of a second layer.
+ *
+ * The folded stack ends on an alpha pass that paints the base texture back over the reflection, so
+ * in both `Alpha` shaders that mask it the base's own alpha is how opaque the surface is: 1 covers
+ * the reflection completely and only the parts the artist cut away stay shiny.
  */
 const COMBINER_GLSL = /* glsl */ `
 uniform int uPixelShader;
@@ -275,7 +279,7 @@ vec4 m2Combine(vec3 c, float a, vec4 t0, vec4 t1) {
   if (s == ${PixelShader.Mod2xMod2x}) return vec4(c * t0.rgb * t1.rgb * 4.0, t0.a * t1.a * 4.0);
   if (s == ${PixelShader.OpaqueMod2xNAAlpha}) return vec4(c * t0.rgb * mix(t1.rgb * 2.0, vec3(1.0), t0.a), a);
   if (s == ${PixelShader.OpaqueAddAlpha}) return vec4(c * t0.rgb + t1.rgb * t1.a, a);
-  if (s == ${PixelShader.OpaqueAddAlphaAlpha}) return vec4(c * t0.rgb + t1.rgb * t1.a * t0.a, a);
+  if (s == ${PixelShader.OpaqueAddAlphaAlpha}) return vec4(c * t0.rgb + t1.rgb * t1.a * (1.0 - t0.a), a);
   return vec4(c * t0.rgb, a * t0.a);
 }
 `;

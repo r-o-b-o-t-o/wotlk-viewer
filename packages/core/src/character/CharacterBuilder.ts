@@ -16,10 +16,10 @@ import {
 	GeosetGroup,
 	InventoryType,
 	ITEM_TEXTURE_SLOTS,
-	ITEM_VISUAL_ATTACHMENTS,
 	RaceFlag,
 } from "./constants.js";
 import type { GameData, ItemDisplayInfo } from "./GameData.js";
+import { loadItemModel, objectComponentPath, stripExt } from "./itemModel.js";
 import { TextureCompositor } from "./TextureCompositor.js";
 
 export interface CharacterItem {
@@ -544,46 +544,19 @@ export class CharacterBuilder {
 		particleColorId: number,
 		itemVisual = 0,
 	): Promise<void> {
-		const modelPath = objectComponentPath(folder, modelName, "m2");
 		try {
-			const model = await this.assets.loadModel(modelPath);
-			const inst = await M2Instance.create(model, this.assets, this.lighting);
-			if (texture && inst.hasTextureType(M2TextureType.ObjectSkin)) {
-				inst.setReplaceableTexture(
-					M2TextureType.ObjectSkin,
-					await this.assets.loadTexture(objectComponentPath(folder, texture, "blp")),
-				);
-			}
-			// Some appearances recolour the model's particles; the DBC is only read when one asks for it.
-			if (particleColorId) {
-				const row = (await this.data.particleColors()).get(particleColorId);
-				if (row) inst.setParticleColors(row.colors);
-			}
-			if (!body.attachModel(inst, attachment)) return inst.dispose();
-			if (itemVisual) await this.attachItemVisuals(inst, itemVisual);
+			const inst = await loadItemModel(this.assets, this.data, this.lighting, {
+				folder,
+				model: modelName,
+				texture,
+				particleColorId,
+				itemVisual,
+			});
+			if (!body.attachModel(inst, attachment)) inst.dispose();
 		} catch (e) {
-			console.warn(`Failed to attach ${modelPath}: ${e instanceof Error ? e.message : e}`);
+			const path = objectComponentPath(folder, modelName, "m2");
+			console.warn(`Failed to attach ${path}: ${e instanceof Error ? e.message : e}`);
 		}
-	}
-
-	/**
-	 * Hangs an item visual's effect models off the item model's five ItemVisual attachments. Items
-	 * with none of those attachments, such as most armour, simply show nothing.
-	 */
-	private async attachItemVisuals(item: M2Instance, visualId: number): Promise<void> {
-		const models = await this.data.itemVisualModels(visualId);
-		await Promise.all(
-			models.map(async (path, slot) => {
-				if (!path) return;
-				try {
-					const model = await this.assets.loadModel(path);
-					const inst = await M2Instance.create(model, this.assets, this.lighting);
-					if (!item.attachModel(inst, ITEM_VISUAL_ATTACHMENTS[slot])) inst.dispose();
-				} catch (e) {
-					console.warn(`Failed to attach item visual ${path}: ${e instanceof Error ? e.message : e}`);
-				}
-			}),
-		);
 	}
 }
 
@@ -601,15 +574,6 @@ function guildTabardLayers(e: GuildEmblem): { path: string; region: CharRegion }
 		{ path: `Textures\\GuildEmblems\\${name}_TU_U.blp`, region: CharRegion.TorsoUpper },
 		{ path: `Textures\\GuildEmblems\\${name}_TL_U.blp`, region: CharRegion.TorsoLower },
 	]);
-}
-
-function stripExt(name: string): string {
-	return name.replace(/\.(mdx|mdl|m2)$/i, "");
-}
-
-/** `Item\ObjectComponents\<folder>\<name>.<ext>`; DBC model names carry an .mdx extension. */
-function objectComponentPath(folder: string, name: string, ext: "m2" | "blp"): string {
-	return `Item\\ObjectComponents\\${folder}\\${stripExt(name)}.${ext}`;
 }
 
 /** Attachment for a put-away weapon; unknown sheathe types fall back to the back sheath. */

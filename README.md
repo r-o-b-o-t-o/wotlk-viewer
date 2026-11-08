@@ -8,9 +8,9 @@ from an extracted game client and assembles fully equipped player characters.
 
 | Package                | Purpose                                                                                                                                                                                                                                   |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@wotlk-viewer/core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, `BackdropBuilder`, typed DBC access (`GameData`). UI-framework agnostic.                  |
+| `@wotlk-viewer/core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, `ItemBuilder`, `BackdropBuilder`, typed DBC access (`GameData`). UI-framework agnostic.   |
 | `@wotlk-viewer/server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` (at `@wotlk-viewer/server/fs`) for Node scripts and tests. |
-| `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`, `<Backdrop>`.                                                                                                                                                  |
+| `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`, `<Item>`, `<Backdrop>`.                                                                                                                                        |
 | `@wotlk-viewer/react`  | The same components for React.                                                                                                                                                                                                            |
 | `apps/demo`            | SolidJS demo: browse database characters and their pets, stand them in their race's character-creation scene, tweak appearance and equipment, play animations.                                                                            |
 
@@ -135,8 +135,9 @@ import { Character, WowViewer } from '@wotlk-viewer/solid';
 ```
 
 `<Model assets path="Creature\Murloc\Murloc.m2" />` shows a raw model, `<Creature assets displayId={188} />` a creature
-by display id. All three take a `position`, either `[x, y, z]` in the viewer's Z-up space or a function of the loaded
-instance; `petPosition` is one such function, standing a pet off its owner's left shoulder and a step back. Passing
+by display id, and `<Item assets item={{ itemEntry: 49623 }} />` one item on its own — a weapon, shield, helm,
+shoulder, quiver or ammo model, with its enchant's effect on it. All of them take a `position`, either `[x, y, z]` in
+the viewer's Z-up space or a function of the loaded instance; `petPosition` is one such function, standing a pet off its owner's left shoulder and a step back. Passing
 the character's pet to `<Creature pet>` also sizes it the way the client does, and `pivot` frames and orbits the
 camera on the character rather than on the pair:
 
@@ -162,7 +163,7 @@ The package ships TSX source (like most Solid libraries); compile it with `vite-
 
 ### React
 
-Same API from `@wotlk-viewer/react` (`WowViewer`, `Model`, `Character`, `Creature`, `Backdrop`, `useViewer`). Needs a bundler with the
+Same API from `@wotlk-viewer/react` (`WowViewer`, `Model`, `Character`, `Creature`, `Item`, `Backdrop`, `useViewer`). Needs a bundler with the
 automatic JSX runtime (Vite does this out of the box).
 
 ### Serving game data
@@ -266,6 +267,12 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   enchant's visual and nothing else, as the client's own `AddHelm` and `AddShoulders` do. 877 item entries reach a
   visual this way, across 67 of them; every effect model they name is on disk but one, visual 144's
   `Spells\BloodBold_Missile_Low.mdx`, which is a typo for `BloodBolt` and so shows nothing in the client either.
+- `ItemBuilder` / `<Item>` shows only the pieces that have a model of their own under
+  `Item\ObjectComponents`: weapons, shields, helms, shoulders, quivers and ammo. Armour that the client draws
+  as a body texture — chests, legs, gloves, belts, boots, bracers, tabards and cloaks — has no model to show and
+  is reported as such. A shoulder appearance holds a left and a right piece, picked with `right`; anything else
+  has only the one, and asking for its right piece gets that. Helms are cut per race and gender, so an item
+  shown alone needs a `race`/`gender` to pick the variant, human male by default.
 - Glowing eyes (geoset 1703) are turned on for the death knight class alone. The client also lights them for a
   face whose `CharSections` row carries flag 0x4, which in 3.3.5a marks the death knight face and skin colour
   combinations — face variations 12-23 plus the pale re-colours of a couple of ordinary faces, per race. Picking

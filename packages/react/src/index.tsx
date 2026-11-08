@@ -4,6 +4,7 @@ import {
 	CharacterBuilder,
 	CreatureBuilder,
 	GameData,
+	ItemBuilder,
 	M2Instance,
 	mountBackdrop,
 	mountInstance,
@@ -12,6 +13,7 @@ import {
 	type AssetManager,
 	type CharacterAppearance,
 	type InstancePosition,
+	type ItemAppearance,
 	type PetInfo,
 	type ViewerOptions,
 } from "@wotlk-viewer/core";
@@ -210,6 +212,27 @@ export function Creature(props: CreatureProps) {
 			return new CreatureBuilder(props.assets, data.current, viewer.lighting).build(props.displayId, props.pet);
 		},
 		[props.displayId, props.pet?.family, props.pet?.level],
+		props,
+	);
+	return null;
+}
+
+export interface ItemProps extends InstanceProps {
+	assets: AssetManager;
+	gameData?: GameData;
+	item: ItemAppearance;
+}
+
+/** Displays one item model on its own — a weapon, shield, helm, shoulder or quiver. */
+export function Item(props: ItemProps) {
+	const viewer = useViewer();
+	const data = useRef<GameData | null>(null);
+	useInstance(
+		() => {
+			data.current ??= props.gameData ?? new GameData(props.assets);
+			return new ItemBuilder(props.assets, data.current, viewer.lighting).build(props.item);
+		},
+		[JSON.stringify(props.item)],
 		props,
 	);
 	return null;

@@ -61,6 +61,14 @@ export {
 	type GuildEmblem,
 } from "./character/CharacterBuilder.js";
 export { CreatureBuilder } from "./character/CreatureBuilder.js";
+export { ItemBuilder, type ItemAppearance } from "./character/ItemBuilder.js";
+export {
+	attachItemVisuals,
+	ITEM_MODEL_FOLDERS,
+	loadItemModel,
+	objectComponentPath,
+	type ItemModelSpec,
+} from "./character/itemModel.js";
 export { petPosition, petScale, type PetInfo } from "./character/pet.js";
 export {
 	BackdropBuilder,

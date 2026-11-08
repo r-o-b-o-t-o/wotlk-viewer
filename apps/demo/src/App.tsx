@@ -11,9 +11,10 @@ import {
 	petPosition,
 	type CharacterAppearance,
 	type CharacterItem,
+	type ItemAppearance,
 	type M2Instance,
 } from "@wotlk-viewer/core";
-import { Backdrop, Character, Creature, Model, WowViewer } from "@wotlk-viewer/solid";
+import { Backdrop, Character, Creature, Item, Model, WowViewer } from "@wotlk-viewer/solid";
 // Type-only, so the server package is erased from the browser bundle.
 import type { CharacterDetails, CharacterSummary } from "@wotlk-viewer/server";
 
@@ -44,7 +45,7 @@ const MODELS = [
 	"Item\\ObjectComponents\\Weapon\\Sword_1H_Ashbringer_D_01.m2",
 ];
 
-type Mode = "character" | "model" | "creature";
+type Mode = "character" | "model" | "creature" | "item";
 
 export function App(): JSX.Element {
 	const [mode, setMode] = createSignal<Mode>("character");
@@ -64,6 +65,7 @@ export function App(): JSX.Element {
 		showEnchants: true,
 	});
 	const [modelPath, setModelPath] = createSignal(MODELS[0]);
+	const [item, setItem] = createStore<ItemAppearance>({ itemEntry: 49623 }); // Shadowmourne
 	const [animation, setAnimation] = createSignal(0);
 	const [animIds, setAnimIds] = createSignal<number[]>([]);
 	const [status, setStatus] = createSignal("");
@@ -191,6 +193,7 @@ export function App(): JSX.Element {
 					<select value={mode()} onChange={(e) => setMode(e.currentTarget.value as Mode)}>
 						<option value="character">Character</option>
 						<option value="creature">Creature (display id)</option>
+						<option value="item">Item (entry)</option>
 						<option value="model">Model file</option>
 					</select>
 				</div>
@@ -203,6 +206,76 @@ export function App(): JSX.Element {
 							value={displayId()}
 							onChange={(e) => setDisplayId(Number(e.currentTarget.value))}
 						/>
+					</div>
+				</Show>
+
+				<Show when={mode() === "item"}>
+					<div class="row">
+						<label>Item entry</label>
+						<input
+							type="number"
+							value={item.itemEntry ?? ""}
+							onChange={(e) =>
+								setItem({ itemEntry: Number(e.currentTarget.value) || undefined, displayId: undefined })
+							}
+						/>
+					</div>
+					<div class="row">
+						<label>Display id</label>
+						<input
+							type="number"
+							value={item.displayId ?? ""}
+							onChange={(e) =>
+								setItem({ displayId: Number(e.currentTarget.value) || undefined, itemEntry: undefined })
+							}
+						/>
+					</div>
+					<div class="row">
+						<label>Enchant</label>
+						<input
+							type="number"
+							value={item.enchant ?? ""}
+							onChange={(e) => setItem("enchant", Number(e.currentTarget.value) || undefined)}
+						/>
+					</div>
+					<div class="row toggles">
+						<label>
+							<input
+								type="checkbox"
+								checked={item.showEnchants !== false}
+								onChange={(e) => setItem("showEnchants", e.currentTarget.checked)}
+							/>{" "}
+							Enchants
+						</label>
+						{/* A shoulder appearance holds a left and a right piece; everything else only a left. */}
+						<label>
+							<input
+								type="checkbox"
+								checked={!!item.right}
+								onChange={(e) => setItem("right", e.currentTarget.checked)}
+							/>{" "}
+							Right piece
+						</label>
+					</div>
+					{/* Helms are cut per race and gender, so the variant has to be picked. */}
+					<div class="row">
+						<label>Helm fit</label>
+						<select
+							value={`${item.race ?? 1}|${item.gender ?? 0}`}
+							onChange={(e) => {
+								const [race, gender] = e.currentTarget.value.split("|").map(Number);
+								setItem({ race, gender });
+							}}
+						>
+							<For each={PLAYABLE_RACES}>
+								{(r) => (
+									<>
+										<option value={`${r}|0`}>{races()?.get(r)?.name ?? r} male</option>
+										<option value={`${r}|1`}>{races()?.get(r)?.name ?? r} female</option>
+									</>
+								)}
+							</For>
+						</select>
 					</div>
 				</Show>
 
@@ -449,6 +522,16 @@ export function App(): JSX.Element {
 							assets={assets}
 							gameData={gameData}
 							displayId={displayId()}
+							animation={animation()}
+							onLoad={onLoad}
+							onError={onError}
+						/>
+					</Show>
+					<Show when={mode() === "item"}>
+						<Item
+							assets={assets}
+							gameData={gameData}
+							item={item}
 							animation={animation()}
 							onLoad={onLoad}
 							onError={onError}

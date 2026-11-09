@@ -79,6 +79,8 @@ interface ResolvedItem {
 	slot: EquipmentSlot;
 	display: ItemDisplayInfo;
 	inventoryType: InventoryType;
+	/** Inventory type of the appearance on show: the model's own, which a transmog makes differ. */
+	lookType: InventoryType;
 	/** Item.dbc SheatheType (0 = none). */
 	sheatheType: number;
 	/** SpellItemEnchantment id of the permanent enchant (0 = none). */
@@ -446,8 +448,9 @@ export class CharacterBuilder {
 					item.display.particleColorId,
 					await this.data.heldItemVisual(showEnchants ? item.enchant : 0, item.display),
 					// INVTYPE_RANGED is the bows; all but one crossbow, and every gun and wand, are
-					// INVTYPE_RANGEDRIGHT and get none.
-					item.inventoryType === InventoryType.Ranged,
+					// INVTYPE_RANGEDRIGHT and get none. The appearance decides, so a gun transmogged into a
+					// bow is strung and not the other way round: the string belongs to the model on show.
+					item.lookType === InventoryType.Ranged,
 				),
 			);
 		}
@@ -509,6 +512,7 @@ export class CharacterBuilder {
 				slot: it.slot,
 				display,
 				inventoryType,
+				lookType: look?.inventoryType ?? inventoryType,
 				sheatheType: look?.sheatheType ?? 0,
 				// The transmog only lends its look; the enchant stays the real item's.
 				enchant: it.enchant ?? 0,

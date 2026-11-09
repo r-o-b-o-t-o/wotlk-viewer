@@ -313,7 +313,11 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   same pair: most swords and axes have them, and Shadowmourne would be strung if the inventory type did not
   decide it. An item shown on its own by display id has no inventory type to go on, so `<Item displayId>`
   leaves a bow stringless where `<Item itemEntry>` strings it; in a character's ranged slot a display id
-  falls back to the slot's own type instead, which strings whatever model stands in it.
+  falls back to the slot's own type instead, which strings whatever model stands in it. Under a transmog the
+  appearance decides, as the sheathing already does: a gun transmogged into a bow is strung and a bow
+  transmogged into a gun is not, the string going with the model on show rather than with the item
+  underneath. The client has no say here, transmog being a server module and not something 3.3.5a ever
+  rendered.
 - Translucent batches of one model are drawn in `priorityPlane` order, additive glow decals last within a plane and
   file order under that, instead of being depth-sorted per submesh: every batch of a mesh shares one sort key in
   three.js. That covers the glue backdrops, which lean on the planes heavily, and about one model in twenty sets

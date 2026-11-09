@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readTrackKeys } from "../animation/tracks.js";
+import { M2Model } from "../render/M2Model.js";
 import { parseM2 } from "./m2.js";
 import { parseSkin } from "./skin.js";
 import { parseBlp } from "./blp.js";
@@ -137,6 +138,26 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 			expect(b.materialIndex).toBeLessThan(m2.materials.length);
 			expect(b.textureComboIndex + b.textureCount).toBeLessThanOrEqual(m2.textureLookup.length);
 		}
+	});
+
+	it("reads a one-slot track for every sequence", () => {
+		const elf = parseM2(read("Character/NightElf/Female/NightElfFemale.M2"));
+		const model = new M2Model(
+			"Character/NightElf/Female/NightElfFemale.M2",
+			elf,
+			parseSkin(read("Character/NightElf/Female/NightElfFemale00.skin")),
+		);
+		const glow = model.skin.batches.find((b) => model.skin.submeshes[b.submeshIndex].id === 1702)!;
+		const weight = elf.textureWeights[elf.transparencyLookup[glow.textureWeightComboIndex]].weight;
+		expect(weight.timestamps.length).toBe(1);
+		// Stand is not slot 0 here, and the eye glow still has to come out at half its texture.
+		const stand = model.findSequence(0);
+		expect(stand).toBeGreaterThan(0);
+		expect(model.keys(weight, stand, "fixed16")!.values[0]).toBeCloseTo(0.5, 3);
+		// A slot the track does have but left empty is not a constant: it takes the default.
+		const alpha = elf.colors[glow.colorIndex].alpha;
+		expect(alpha.timestamps.length).toBe(elf.sequences.length);
+		expect(model.keys(alpha, stand, "fixed16")).toBeNull();
 	});
 });
 

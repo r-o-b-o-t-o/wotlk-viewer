@@ -98,7 +98,8 @@ export class M2Model {
 	keys(track: M2Track, seq: number, kind: TrackKind): TrackKeys | null {
 		// Global sequences are keyed by slot 0 and their data always lives in the .m2 itself.
 		const global = track.globalSeq >= 0;
-		if (global) seq = 0;
+		// `M2AnimateTrack` reads slot 0 past a track's end too: one slot holding one key is a constant.
+		if (global || seq >= track.timestamps.length) seq = 0;
 		let cache = this.keyCache.get(track);
 		if (!cache) {
 			cache = new Array(this.m2.sequences.length);

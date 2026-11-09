@@ -2,6 +2,7 @@ import { Bone, Camera, DetachedBindMode, Matrix4, Object3D, Skeleton, SkinnedMes
 import type { AssetManager } from "../AssetManager.js";
 import { M2Animator, type BillboardBasis } from "../animation/M2Animator.js";
 import { M2BlendMode, M2TextureType, type M2Attachment } from "../formats/m2.js";
+import { BowString } from "./BowString.js";
 import { M2Material, TexCoordSource, type M2Lighting } from "./M2Material.js";
 import type { M2Model } from "./M2Model.js";
 import { ParticleSystem, type EmitterFrames } from "./ParticleSystem.js";
@@ -65,6 +66,8 @@ export class M2Instance extends Object3D {
 	readonly attached: AttachedChild[] = [];
 	readonly particles: ParticleSystem[];
 	readonly ribbons: RibbonSystem[];
+	/** The string of a bow, once `showBowString()` has asked for it. */
+	bowString: BowString | null = null;
 
 	private readonly skeleton: Skeleton;
 	/** Textures created for this instance alone; disposed with it. */
@@ -251,6 +254,24 @@ export class M2Instance extends Object3D {
 	}
 
 	/**
+	 * Draws the string of a bow between the `$WTT` and `$WTB` events its limbs carry, the way the
+	 * client hangs `CDrawBowString` off a ranged weapon. Returns false, drawing nothing, for a model
+	 * without that pair, which is most crossbows and nearly every gun. Carrying the pair says little
+	 * in itself — weapon trails hang off the same two events, so most swords and axes have them too
+	 * — so it is the caller that decides which items deserve a string.
+	 */
+	showBowString(): boolean {
+		if (this.bowString) return true;
+		const string = BowString.create(this.model.m2);
+		if (!string) return false;
+		this.bowString = string;
+		string.line.renderOrder = this.mesh.renderOrder;
+		string.update(this.animator.boneMatrices, this.lighting.ambient);
+		this.add(string.line);
+		return true;
+	}
+
+	/**
 	 * Where an attachment point sits in this instance's own space, bone animation included. Null when
 	 * the model has no such point (see AttachmentId).
 	 */
@@ -274,6 +295,7 @@ export class M2Instance extends Object3D {
 	 */
 	setRenderOrder(base: number): void {
 		this.mesh.renderOrder = base;
+		if (this.bowString) this.bowString.line.renderOrder = base;
 		for (const { instance } of this.attached) instance.setRenderOrder(base - 1);
 		for (const ps of this.particles) {
 			// Only the emitters the client sorts by plane take one. The two blend modes it sends to the
@@ -312,6 +334,7 @@ export class M2Instance extends Object3D {
 		for (let i = 0; i < bones.length; i++) bones[i].matrixWorld.copy(this.animator.boneMatrices[i]);
 
 		this.updateMaterials();
+		this.bowString?.update(this.animator.boneMatrices, this.lighting.ambient);
 
 		const boneMatrices = this.animator.boneMatrices;
 		if (this.particles.length > 0) {
@@ -386,6 +409,8 @@ export class M2Instance extends Object3D {
 		for (const m of this.materials) m.dispose();
 		for (const ps of this.particles) ps.dispose();
 		for (const rs of this.ribbons) rs.dispose();
+		this.bowString?.dispose();
+		this.bowString = null;
 		for (const t of this.ownedTextures) t.dispose();
 		this.ownedTextures.clear();
 		this.skeleton.dispose();

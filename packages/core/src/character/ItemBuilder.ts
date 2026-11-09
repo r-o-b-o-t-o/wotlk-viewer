@@ -73,6 +73,9 @@ export class ItemBuilder {
 			texture,
 			particleColorId: display.particleColorId,
 			itemVisual,
+			// As on a character: the string is drawn for INVTYPE_RANGED alone. An item given by display
+			// id carries no inventory type, so a bow shown that way goes without one.
+			bowString: inventoryType === InventoryType.Ranged,
 		});
 	}
 

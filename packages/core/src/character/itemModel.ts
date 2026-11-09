@@ -28,6 +28,8 @@ export interface ItemModelSpec {
 	particleColorId?: number;
 	/** ItemVisuals.dbc row whose effect models hang off the item's ItemVisual attachments. */
 	itemVisual?: number;
+	/** Draw the bow string between the model's limb-tip events (ranged weapons; see `showBowString`). */
+	bowString?: boolean;
 }
 
 /** Loads one item model with its skin texture, particle colours and visual effects. */
@@ -50,6 +52,7 @@ export async function loadItemModel(
 		const row = (await data.particleColors()).get(spec.particleColorId);
 		if (row) inst.setParticleColors(row.colors);
 	}
+	if (spec.bowString) inst.showBowString();
 	if (spec.itemVisual) await attachItemVisuals(assets, data, lighting, inst, spec.itemVisual);
 	return inst;
 }

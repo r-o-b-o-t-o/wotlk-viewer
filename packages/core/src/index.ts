@@ -25,6 +25,7 @@ export {
 	type M2PointLight,
 } from "./render/M2Material.js";
 export { M2Instance, type PlayOptions } from "./render/M2Instance.js";
+export { BowString } from "./render/BowString.js";
 export { ParticleSystem, type EmitterFrames } from "./render/ParticleSystem.js";
 export {
 	BACKDROP_CHARACTER_ATTACHMENT,

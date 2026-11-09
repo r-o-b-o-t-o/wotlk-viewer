@@ -297,9 +297,23 @@ Things deliberately left out or approximated; worth deciding on if they matter f
   screen shows is decided by class alone — `ShowCharacter` skips both hand slots for a hunter and the ranged slot
   for everyone else, so `drawsRangedWeapon(classId)` is what the demo sets `drawRanged` from when a character is
   loaded. Nothing is ever sheathed there: the client adds every weapon with `SHEATHE_NONE`.
-- A bow's string is not drawn stretched. The client hangs `CDrawBowString::GlueDrawBowStringCB` off a ranged
-  weapon whose model carries the `$TWT` and `$TWB` events, and only for `INVTYPE_RANGED` — bows and crossbows,
-  not the guns and wands of `INVTYPE_RANGEDRIGHT`.
+- A bow's string is drawn as `CDrawBowString::DrawBowString` draws it: two unlit, untextured lines from the
+  `$WTT` event at one limb tip, through the draw hand, to `$WTB` at the other, coloured with the scene's
+  ambient. The hand is where an archer holds the nock, and the client only has one while a unit is in ranged
+  mode (the arrow-hand attachment, or the right hand); given no unit it uses the midpoint of the two anchors,
+  which leaves the string straight. That is the only form here, and the only one a character-selection screen
+  shows: its `GlueDrawBowStringCB` passes no unit. Nothing is drawn back, since no ranged animation state
+  exists here to draw it. The line is one pixel wide at any distance, as the client's own `GxPrim_Lines` is.
+  Which items get one follows the glue screen's rule, `INVTYPE_RANGED`, which in 3.3.5a is the bows: 305
+  entries, of which 303 are bows, one a crossbow (21550) and one an armour row typed by mistake (19837). 304
+  of their models carry both anchors; 21550's does not, so that crossbow shows no string. Every other
+  crossbow, like every gun and wand, is `INVTYPE_RANGEDRIGHT`, and a thrown weapon is `INVTYPE_THROWN`; none
+  of them gets a string — the client's own in-world rule is narrower still, hooking the string on item class
+  2 subclass 2, bows alone. Carrying the two anchors means little by itself, since weapon trails hang off the
+  same pair: most swords and axes have them, and Shadowmourne would be strung if the inventory type did not
+  decide it. An item shown on its own by display id has no inventory type to go on, so `<Item displayId>`
+  leaves a bow stringless where `<Item itemEntry>` strings it; in a character's ranged slot a display id
+  falls back to the slot's own type instead, which strings whatever model stands in it.
 - Translucent batches of one model are drawn in `priorityPlane` order, additive glow decals last within a plane and
   file order under that, instead of being depth-sorted per submesh: every batch of a mesh shares one sort key in
   three.js. That covers the glue backdrops, which lean on the planes heavily, and about one model in twenty sets

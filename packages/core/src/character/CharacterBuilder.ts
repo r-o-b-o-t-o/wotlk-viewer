@@ -445,6 +445,9 @@ export class CharacterBuilder {
 					attachment,
 					item.display.particleColorId,
 					await this.data.heldItemVisual(showEnchants ? item.enchant : 0, item.display),
+					// INVTYPE_RANGED is the bows; all but one crossbow, and every gun and wand, are
+					// INVTYPE_RANGEDRIGHT and get none.
+					item.inventoryType === InventoryType.Ranged,
 				),
 			);
 		}
@@ -543,6 +546,7 @@ export class CharacterBuilder {
 		attachment: AttachmentId,
 		particleColorId: number,
 		itemVisual = 0,
+		bowString = false,
 	): Promise<void> {
 		try {
 			const inst = await loadItemModel(this.assets, this.data, this.lighting, {
@@ -551,6 +555,7 @@ export class CharacterBuilder {
 				texture,
 				particleColorId,
 				itemVisual,
+				bowString,
 			});
 			if (!body.attachModel(inst, attachment)) inst.dispose();
 		} catch (e) {

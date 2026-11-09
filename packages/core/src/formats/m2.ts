@@ -152,6 +152,19 @@ export interface M2Attachment {
 	animateAttached: M2Track; // uint8
 }
 
+/**
+ * A point on a bone that an animation fires at a keyframe. The firing times and the event's own
+ * payload go unread; what is kept is where the point sits, which is what `$WTT` and `$WTB`, a bow's
+ * string anchors, are needed for.
+ */
+export interface M2Event {
+	/** Four characters, in the order the file spells them, e.g. "$WTT". */
+	id: string;
+	bone: number;
+	/** Relative to `bone`. */
+	position: [number, number, number];
+}
+
 export const M2LightType = {
 	/** Not used outside the glue screens, where the client takes the direction from elsewhere. */
 	Directional: 0,
@@ -223,6 +236,7 @@ export interface M2Data {
 	textureCombinerCombos: Uint16Array;
 	attachments: M2Attachment[];
 	attachmentLookup: Int16Array;
+	events: M2Event[];
 	lights: M2Light[];
 	cameras: M2Camera[];
 	ribbonEmitters: M2Ribbon[];
@@ -719,7 +733,7 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 	r.skip(24 + 4 + 8 * 3); // collision box, radius, collision arrays
 	const attachments = readArray(r);
 	const attachmentLookup = readArray(r);
-	r.skip(8); // events: unused
+	const events = readArray(r);
 	const lights = readArray(r);
 	const cameras = readArray(r);
 	r.skip(8); // camera lookup: unused
@@ -773,6 +787,14 @@ export function parseM2(buffer: ArrayBuffer): M2Data {
 		}),
 		textureCombinerCombos: u16(combinerCombos),
 		attachmentLookup: i16(attachmentLookup),
+		events: readList(r, events, 36, (r) => {
+			const id = r.string(4);
+			r.skip(4); // the event's own payload, e.g. a sound id
+			const bone = r.u32();
+			const position = r.vec3();
+			r.skip(12); // the timeline it fires on
+			return { id, bone, position };
+		}),
 		lights: readList(r, lights, 156, readLight),
 		cameras: readList(r, cameras, 100, readCamera),
 		ribbonEmitters: readList(r, ribbons, 176, readRibbon),

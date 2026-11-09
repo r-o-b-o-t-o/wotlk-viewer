@@ -73,6 +73,19 @@ describe.skipIf(!hasClient)("M2 / SKIN parsing", () => {
 		expect(m2.textures.some((t) => t.type === 6)).toBe(true); // hair slot
 	});
 
+	it("reads a bow's string anchors", () => {
+		const bow = parseM2(read("Item/ObjectComponents/Weapon/Bow_1H_Standard_A_01.m2"));
+		// One at each limb tip, on a bone of its own, so the string follows the limbs as they animate.
+		const top = bow.events.find((e) => e.id === "$WTT");
+		const bottom = bow.events.find((e) => e.id === "$WTB");
+		expect(top).toBeDefined();
+		expect(bottom).toBeDefined();
+		expect(top!.bone).not.toBe(bottom!.bone);
+		expect(top!.position[0]).toBeGreaterThan(0);
+		expect(bottom!.position[0]).toBeLessThan(0);
+		for (const e of bow.events) expect(e.bone).toBeLessThan(bow.bones.length);
+	});
+
 	it("reads the cameras a character is shown through", () => {
 		// The pair every character model carries: a portrait framing the head, and the character tab.
 		expect(m2.cameras.map((c) => c.type)).toEqual([0, 1]);

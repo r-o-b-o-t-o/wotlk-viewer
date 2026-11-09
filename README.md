@@ -6,13 +6,13 @@ from an extracted game client and assembles fully equipped player characters.
 
 ## Packages
 
-| Package                | Purpose                                                                                                                                                                                                                                   |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@wotlk-viewer/core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, `ItemBuilder`, `BackdropBuilder`, typed DBC access (`GameData`). UI-framework agnostic.   |
-| `@wotlk-viewer/server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` (at `@wotlk-viewer/server/fs`) for Node scripts and tests. |
-| `@wotlk-viewer/solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`, `<Item>`, `<Backdrop>`.                                                                                                                                        |
-| `@wotlk-viewer/react`  | The same components for React.                                                                                                                                                                                                            |
-| `apps/demo`            | SolidJS demo: browse database characters and their pets, stand them in their race's character-creation scene, tweak appearance and equipment, play animations.                                                                            |
+| Package                        | Purpose                                                                                                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@roboto_/wotlk-viewer-core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, `ItemBuilder`, `BackdropBuilder`, typed DBC access (`GameData`). UI-framework agnostic.           |
+| `@roboto_/wotlk-viewer-server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` (at `@roboto_/wotlk-viewer-server/fs`) for Node scripts and tests. |
+| `@roboto_/wotlk-viewer-solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`, `<Item>`, `<Backdrop>`.                                                                                                                                                |
+| `@roboto_/wotlk-viewer-react`  | The same components for React.                                                                                                                                                                                                                    |
+| `apps/demo`                    | SolidJS demo: browse database characters and their pets, stand them in their race's character-creation scene, tweak appearance and equipment, play animations.                                                                                    |
 
 ## Getting started
 
@@ -67,9 +67,9 @@ import {
 	Gender,
 	HttpDataSource,
 	Viewer,
-} from "@wotlk-viewer/core";
+} from "@roboto_/wotlk-viewer-core";
 
-const assets = new AssetManager(new HttpDataSource("/data")); // served by @wotlk-viewer/server
+const assets = new AssetManager(new HttpDataSource("/data")); // served by @roboto_/wotlk-viewer-server
 const viewer = new Viewer({ container: document.getElementById("view")! });
 viewer.start();
 
@@ -127,7 +127,7 @@ once per frame and parent it under a group rotated by `-90°` around X (see `Vie
 ### SolidJS
 
 ```tsx
-import { Character, WowViewer } from '@wotlk-viewer/solid';
+import { Character, WowViewer } from '@roboto_/wotlk-viewer-solid';
 
 <WowViewer>
   <Character assets={assets} appearance={appearance()} animation={AnimationId.Stand} onLoad={(inst) => ...} />
@@ -163,13 +163,13 @@ The package ships TSX source (like most Solid libraries); compile it with `vite-
 
 ### React
 
-Same API as the SolidJS bindings, from `@wotlk-viewer/react` (`WowViewer`, `Model`, `Character`, `Creature`, `Item`, `Backdrop`, `useViewer`). Needs a bundler with the
+Same API as the SolidJS bindings, from `@roboto_/wotlk-viewer-react` (`WowViewer`, `Model`, `Character`, `Creature`, `Item`, `Backdrop`, `useViewer`). Needs a bundler with the
 automatic JSX runtime (Vite does this out of the box).
 
 ### Serving game data
 
 ```ts
-import { createMiddleware, startServer } from "@wotlk-viewer/server";
+import { createMiddleware, startServer } from "@roboto_/wotlk-viewer-server";
 
 // Standalone (CORS enabled), or plug the middleware into Vite/Express/Connect:
 await startServer({

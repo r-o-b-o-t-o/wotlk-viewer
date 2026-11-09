@@ -13,10 +13,10 @@ import {
 	type CharacterItem,
 	type ItemAppearance,
 	type M2Instance,
-} from "@wotlk-viewer/core";
-import { Backdrop, Character, Creature, Item, Model, WowViewer } from "@wotlk-viewer/solid";
+} from "@roboto_/wotlk-viewer-core";
+import { Backdrop, Character, Creature, Item, Model, WowViewer } from "@roboto_/wotlk-viewer-solid";
 // Type-only, so the server package is erased from the browser bundle.
-import type { CharacterDetails, CharacterSummary } from "@wotlk-viewer/server";
+import type { CharacterDetails, CharacterSummary } from "@roboto_/wotlk-viewer-server";
 
 const assets = new AssetManager(new HttpDataSource("/data"));
 const gameData = new GameData(assets);

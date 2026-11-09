@@ -23,7 +23,7 @@ export function normalizePath(path: string): string {
 	return path.replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
 }
 
-/** Fetches files from an HTTP server exposing the extracted client (see @wotlk-viewer/server). */
+/** Fetches files from an HTTP server exposing the extracted client (see @roboto_/wotlk-viewer-server). */
 export class HttpDataSource implements DataSource {
 	constructor(private readonly baseUrl = "/data") {}
 
@@ -39,7 +39,7 @@ export class HttpDataSource implements DataSource {
 	}
 
 	/**
-	 * Probes with HEAD. @wotlk-viewer/server answers `?exists` with 200 or 204 to keep missing files out of
+	 * Probes with HEAD. @roboto_/wotlk-viewer-server answers `?exists` with 200 or 204 to keep missing files out of
 	 * the browser console; plain static servers answer 200 or 404. Only 200 counts as present.
 	 */
 	async exists(path: string): Promise<boolean> {

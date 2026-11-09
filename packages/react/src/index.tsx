@@ -16,7 +16,7 @@ import {
 	type ItemAppearance,
 	type PetInfo,
 	type ViewerOptions,
-} from "@wotlk-viewer/core";
+} from "@roboto_/wotlk-viewer-core";
 
 const ViewerContext = createContext<Viewer | null>(null);
 

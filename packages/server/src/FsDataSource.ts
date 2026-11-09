@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { FileNotFoundError, type DataSource } from "@wotlk-viewer/core";
+import { FileNotFoundError, type DataSource } from "@roboto_/wotlk-viewer-core";
 import { defaultRoots, FileResolver } from "./files.js";
 
 /**

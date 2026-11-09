@@ -6,7 +6,7 @@
 		"lib": ["ES2022", "DOM"],
 		"types": ["node"],
 		"paths": {
-			"@wotlk-viewer/core": ["../core/dist/index.d.ts"]
+			"@roboto_/wotlk-viewer-core": ["../core/dist/index.d.ts"]
 		}
 	},
 	"include": ["src"]

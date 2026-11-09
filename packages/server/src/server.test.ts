@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
-import { AssetManager, backdropScene, CharSectionType, GameData, Gender, petScale } from "@wotlk-viewer/core";
+import { AssetManager, backdropScene, CharSectionType, GameData, Gender, petScale } from "@roboto_/wotlk-viewer-core";
 import { FsDataSource } from "./FsDataSource.js";
 import { defaultRoots, FileResolver } from "./files.js";
 

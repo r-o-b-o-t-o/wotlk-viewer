@@ -1,5 +1,5 @@
 {
-	"name": "@wotlk-viewer/core",
+	"name": "@roboto_/wotlk-viewer-core",
 	"version": "0.1.0",
 	"description": "WebGL renderer for World of Warcraft: Wrath of the Lich King models (M2/BLP/DBC) built on three.js",
 	"type": "module",

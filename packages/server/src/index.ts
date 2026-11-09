@@ -13,7 +13,7 @@ export type {
 	EquippedItem,
 } from "./db.js";
 export { CharacterDb, FileResolver, defaultRoots };
-// FsDataSource lives at `@wotlk-viewer/server/fs`; re-exporting it here would drag core's
+// FsDataSource lives at `@roboto_/wotlk-viewer-server/fs`; re-exporting it here would drag core's
 // TypeScript sources into Vite config bundles, which Node cannot load.
 
 export interface ServerOptions {

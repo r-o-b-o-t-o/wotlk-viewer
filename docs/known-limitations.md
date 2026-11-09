@@ -212,7 +212,7 @@ Things deliberately left out or approximated. Maintainers and agents: read this 
 - DBC tables are assumed to use 4-byte fields (true for every 3.3.5a table read here). Little-endian host assumed.
 - Items whose entry is missing from the client's `Item.dbc` (custom server items) are skipped, and a
   `transmogEntry` the client does not know counts as no transmog, falling back to the real item.
-- `HttpDataSource.exists` sends a HEAD with `?exists`, which @wotlk-viewer/server answers 200/204 to keep missing
+- `HttpDataSource.exists` sends a HEAD with `?exists`, which @roboto_/wotlk-viewer-server answers 200/204 to keep missing
   files out of the browser console; any other backend just needs to answer 200 for a file that exists.
 - Decoded textures are held twice while a model is on screen: three.js keeps the pixels on `DataTexture.image.data`
   after upload, and `AssetManager` caches the same `BlpImage` for the character skin compositor. The compressed

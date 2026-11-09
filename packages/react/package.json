@@ -1,7 +1,7 @@
 {
-	"name": "@wotlk-viewer/react",
+	"name": "@roboto_/wotlk-viewer-react",
 	"version": "0.1.0",
-	"description": "React component for @wotlk-viewer/core",
+	"description": "React component for @roboto_/wotlk-viewer-core",
 	"type": "module",
 	"exports": {
 		".": "./src/index.tsx"
@@ -13,13 +13,13 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"peerDependencies": {
-		"@wotlk-viewer/core": "*",
+		"@roboto_/wotlk-viewer-core": "*",
 		"react": ">=18",
 		"three": ">=0.160.0"
 	},
 	"devDependencies": {
 		"@types/react": "^19.2.0",
-		"@wotlk-viewer/core": "*",
+		"@roboto_/wotlk-viewer-core": "*",
 		"react": "^19.2.0"
 	}
 }

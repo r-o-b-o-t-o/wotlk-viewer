@@ -160,8 +160,8 @@ function cellAt(track: M2PartTrack, t: number, fallback: number): number {
  * gravity pulls along the bone's -Z; every other emitter sheds them into the scene at birth and
  * leaves them there, falling along scene down.
  *
- * Simplified: no tumble, wind, zSource or spline emitters, and see "Known limitations" in the
- * README for the rest.
+ * Simplified: no tumble, wind, zSource or spline emitters, and see docs/known-limitations.md
+ * for the rest.
  */
 export class ParticleSystem {
 	readonly mesh: Mesh;

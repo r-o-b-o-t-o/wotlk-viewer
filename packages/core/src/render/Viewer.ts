@@ -48,7 +48,7 @@ export const BACKDROP_PET_ATTACHMENT = 1;
  * items and their visual effects included. Three.js sorts translucent meshes by render order before
  * depth, so a backdrop left level with the models drew after everything sorted below it, and its own
  * translucent batches — foliage, mostly — painted over a weapon's glow however far behind it stood.
- * Standing the whole backdrop first is the trade in the other direction, see "Known limitations".
+ * Standing the whole backdrop first is the trade in the other direction, see docs/known-limitations.md.
  */
 const BACKDROP_RENDER_ORDER = -1000;
 

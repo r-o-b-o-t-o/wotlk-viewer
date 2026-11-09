@@ -16,8 +16,8 @@ extracted client; the end goal is rendering player characters.
 - TypeScript only. Core stays framework agnostic; SolidJS is the primary binding, React follows it.
 - Keep the renderer generic while that stays cheap; when generalizing gets tedious, cut the corner
   in favour of player characters.
-- Write straightforward code and skip minor edge cases; record notable ones under "Known
-  limitations" in `README.md` for the user to triage.
+- Write straightforward code and skip minor edge cases; record notable ones in
+  `docs/known-limitations.md` for the user to triage (not in the README).
 - Comments state the point in one line; never restate the code.
 - Conventional Commits, concise subjects, one logical change per commit. Commit as you go.
 - Relative imports carry `.js` extensions so the built ESM loads in Node.

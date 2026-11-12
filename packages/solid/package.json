@@ -2,25 +2,58 @@
 	"name": "@roboto_/wotlk-viewer-solid",
 	"version": "1.0.0",
 	"description": "SolidJS component for @roboto_/wotlk-viewer-core",
+	"keywords": [
+		"world-of-warcraft",
+		"wotlk",
+		"wow",
+		"m2",
+		"three",
+		"webgl",
+		"solid",
+		"solidjs"
+	],
+	"homepage": "https://github.com/r-o-b-o-t-o/wotlk-viewer#readme",
+	"bugs": "https://github.com/r-o-b-o-t-o/wotlk-viewer/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/r-o-b-o-t-o/wotlk-viewer.git",
+		"directory": "packages/solid"
+	},
+	"license": "MIT",
+	"author": "Axel Cocat (https://github.com/r-o-b-o-t-o)",
 	"type": "module",
 	"exports": {
-		".": "./src/index.tsx"
+		".": {
+			"wotlk-source": "./src/index.tsx",
+			"types": "./dist/index.d.ts",
+			"solid": "./dist/index.jsx",
+			"default": "./dist/index.js"
+		}
 	},
 	"files": [
+		"dist",
 		"src"
 	],
 	"scripts": {
-		"typecheck": "tsc -p tsconfig.json --noEmit"
+		"prebuild": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+		"build": "tsc -p tsconfig.build.json && vite build",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"prepublishOnly": "npm run build --prefix ../core && npm run build"
 	},
 	"peerDependencies": {
-		"@roboto_/wotlk-viewer-core": "*",
+		"@roboto_/wotlk-viewer-core": "^1.0.0",
 		"@solidjs/web": "^2.0.0-rc.21",
 		"solid-js": "^2.0.0-rc.21",
 		"three": ">=0.160.0"
 	},
 	"devDependencies": {
-		"@roboto_/wotlk-viewer-core": "*",
+		"@roboto_/wotlk-viewer-core": "^1.0.0",
+		"@solidjs/vite-plugin": "^3.0.0-next.57",
 		"@solidjs/web": "^2.0.0-rc.21",
-		"solid-js": "^2.0.0-rc.21"
+		"solid-js": "^2.0.0-rc.21",
+		"vite": "^8.3.8"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

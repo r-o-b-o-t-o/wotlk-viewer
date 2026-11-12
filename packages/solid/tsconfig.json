@@ -5,5 +5,5 @@
 		"jsx": "preserve",
 		"jsxImportSource": "@solidjs/web"
 	},
-	"include": ["src"]
+	"include": ["src", "vite.config.ts"]
 }

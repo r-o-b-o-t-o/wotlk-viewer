@@ -9,9 +9,9 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@roboto_/wotlk-viewer-core": "*",
-		"@roboto_/wotlk-viewer-server": "*",
-		"@roboto_/wotlk-viewer-solid": "*",
+		"@roboto_/wotlk-viewer-core": "^1.0.0",
+		"@roboto_/wotlk-viewer-server": "^1.0.0",
+		"@roboto_/wotlk-viewer-solid": "^1.0.0",
 		"@solidjs/web": "^2.0.0-rc.21",
 		"solid-js": "^2.0.0-rc.21",
 		"three": "^0.185.0"

@@ -2,17 +2,44 @@
 	"name": "@roboto_/wotlk-viewer-core",
 	"version": "1.0.0",
 	"description": "WebGL renderer for World of Warcraft: Wrath of the Lich King models (M2/BLP/DBC) built on three.js",
+	"keywords": [
+		"world-of-warcraft",
+		"wotlk",
+		"wow",
+		"m2",
+		"three",
+		"webgl",
+		"blp",
+		"dbc"
+	],
+	"homepage": "https://github.com/r-o-b-o-t-o/wotlk-viewer#readme",
+	"bugs": "https://github.com/r-o-b-o-t-o/wotlk-viewer/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/r-o-b-o-t-o/wotlk-viewer.git",
+		"directory": "packages/core"
+	},
+	"license": "MIT",
+	"author": "Axel Cocat (https://github.com/r-o-b-o-t-o)",
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": {
+			"wotlk-source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
 	},
 	"files": [
+		"dist",
 		"src",
-		"dist"
+		"!src/**/*.test.ts",
+		"!src/.gitattributes"
 	],
 	"scripts": {
+		"prebuild": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
 		"build": "tsc -p tsconfig.build.json",
-		"typecheck": "tsc -p tsconfig.json --noEmit"
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"prepublishOnly": "npm run build"
 	},
 	"peerDependencies": {
 		"three": ">=0.160.0"
@@ -20,5 +47,8 @@
 	"devDependencies": {
 		"@types/three": "^0.185.0",
 		"three": "^0.185.0"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

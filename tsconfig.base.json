@@ -3,6 +3,8 @@
 		"target": "ES2022",
 		"module": "ESNext",
 		"moduleResolution": "Bundler",
+		// Workspace packages resolve to each other's sources; published builds use dist.
+		"customConditions": ["wotlk-source"],
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"strict": true,
 		"noUncheckedIndexedAccess": false,

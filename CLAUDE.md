@@ -62,5 +62,7 @@ catches a misreading that one model will happily agree with.
 - `npm run typecheck`, `npm test`, `npm run build`. Tests read the real client and skip without it.
 - Verify rendering changes in the browser, not just in the typechecker. The demo exposes
   `window.viewer` for inspecting the scene.
+- Workspace packages resolve each other's sources through the `wotlk-source` export condition (tsconfig,
+  demo, Vitest); `dist` only matters for publishing, so `npm pack` and try the tarball after changing `exports`.
 - Vite's dependency cache goes stale after core edits and reports phantom missing exports:
   `rm -rf node_modules/.vite`, then restart.

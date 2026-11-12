@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import { defaultClientConditions, defineConfig, loadEnv, type Plugin } from "vite";
 import solid from "@solidjs/vite-plugin";
 // Relative imports so Vite bundles the TypeScript sources into the config.
 import { createMiddleware } from "../../packages/server/src/index.js";
@@ -27,6 +27,8 @@ export default defineConfig(({ command, mode }) => {
 	return {
 		envDir: ROOT,
 		plugins: [solid(), wotlkData(env.WOW_CLIENT_DIR ?? "", env.WOW_DB_URL || undefined)],
+		// Workspace packages resolve to their sources, so the demo runs without building them.
+		resolve: { conditions: ["wotlk-source", ...defaultClientConditions] },
 		server: { port: 5173 },
 	};
 });

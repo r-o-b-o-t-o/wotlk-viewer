@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { startServer } from "./index.js";
 import { dbOptionsFromUrl } from "./env.js";
 

@@ -2,19 +2,48 @@
 	"name": "@roboto_/wotlk-viewer-server",
 	"version": "1.0.0",
 	"description": "Dev server serving extracted WoW client files and AzerothCore character data",
+	"keywords": [
+		"world-of-warcraft",
+		"wotlk",
+		"wow",
+		"m2",
+		"three",
+		"webgl",
+		"mpq",
+		"azerothcore"
+	],
+	"homepage": "https://github.com/r-o-b-o-t-o/wotlk-viewer#readme",
+	"bugs": "https://github.com/r-o-b-o-t-o/wotlk-viewer/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/r-o-b-o-t-o/wotlk-viewer.git",
+		"directory": "packages/server"
+	},
+	"license": "MIT",
+	"author": "Axel Cocat (https://github.com/r-o-b-o-t-o)",
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts",
-		"./fs": "./src/FsDataSource.ts"
+		".": {
+			"wotlk-source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./fs": {
+			"wotlk-source": "./src/FsDataSource.ts",
+			"types": "./dist/FsDataSource.d.ts",
+			"default": "./dist/FsDataSource.js"
+		}
 	},
 	"scripts": {
+		"prebuild": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+		"build": "tsc -p tsconfig.build.json",
 		"start": "tsx --env-file-if-exists=../../.env src/cli.ts",
 		"extract": "tsx --env-file-if-exists=../../.env src/extractCli.ts",
-		"build": "tsc -p tsconfig.build.json",
-		"typecheck": "tsc -p tsconfig.json --noEmit"
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"prepublishOnly": "npm run build --prefix ../core && npm run build"
 	},
 	"dependencies": {
-		"@roboto_/wotlk-viewer-core": "*",
+		"@roboto_/wotlk-viewer-core": "^1.0.0",
 		"argparse": "^3.0.4",
 		"cli-progress": "^3.12.0",
 		"mysql2": "^3.14.0"
@@ -22,5 +51,20 @@
 	"devDependencies": {
 		"@types/cli-progress": "^3.11.6",
 		"tsx": "^4.20.0"
+	},
+	"bin": {
+		"wotlk-viewer-server": "dist/cli.js",
+		"wotlk-viewer-extract": "dist/extractCli.js"
+	},
+	"files": [
+		"dist",
+		"src",
+		"!src/**/*.test.ts"
+	],
+	"engines": {
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

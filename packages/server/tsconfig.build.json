@@ -5,9 +5,8 @@
 		"rootDir": "src",
 		"lib": ["ES2022", "DOM"],
 		"types": ["node"],
-		"paths": {
-			"@roboto_/wotlk-viewer-core": ["../core/dist/index.d.ts"]
-		}
+		"customConditions": []
 	},
-	"include": ["src"]
+	"include": ["src"],
+	"exclude": ["src/**/*.test.ts"]
 }

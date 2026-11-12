@@ -88,6 +88,8 @@ interface InstanceProps {
 	pivot?: boolean;
 	/** Backdrop attachment this model stands on while the camera is fixed (see `Viewer.staticCamera`). */
 	backdropAttachment?: number;
+	/** A load began, on mount and whenever the model changes; `onLoad` or `onError` follows unless a newer load or unmount cancels it. */
+	onLoadStart?: () => void;
 	onLoad?: (instance: M2Instance) => void;
 	onError?: (error: unknown) => void;
 }
@@ -102,6 +104,7 @@ function useInstance(load: () => Promise<M2Instance>, key: () => unknown, props:
 	createEffect(loadKey, () =>
 		// Load options are read once per load; `position` alone follows changes, through the effect below.
 		untrack(() => {
+			props.onLoadStart?.();
 			const unmount = mountInstance(viewer, load, {
 				position: props.position,
 				autoFrame: props.autoFrame,

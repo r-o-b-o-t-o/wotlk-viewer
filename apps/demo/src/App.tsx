@@ -144,6 +144,8 @@ export function App(): JSX.Element {
 			return;
 		}
 		const c = (await res.json()) as CharacterDetails;
+		// The fetch is done; the Character puts the status back up if this appearance needs a build.
+		setStatus("");
 		setDbCharacter(c);
 		applyCharacter(c, showTransmog());
 		setMode("character");
@@ -541,6 +543,7 @@ export function App(): JSX.Element {
 							animation={animation()}
 							pivot
 							backdropAttachment={BACKDROP_CHARACTER_ATTACHMENT}
+							onLoadStart={() => setStatus("Loading character…")}
 							onLoad={onLoad}
 							onError={onError}
 						/>

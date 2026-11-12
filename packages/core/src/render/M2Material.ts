@@ -324,13 +324,15 @@ export function alphaTestFor(blendMode: number, alpha = 1): number {
 
 /** Configures three.js blending (and `transparent`) for an M2 blend mode. */
 export function applyM2BlendMode(mat: Material, mode: number): void {
-	const set = (src: BlendingSrcFactor, dst: BlendingDstFactor) => {
+	const set = (src: BlendingSrcFactor, dst: BlendingDstFactor, keepAlpha = false) => {
 		mat.blending = CustomBlending;
 		mat.blendEquation = AddEquation;
 		mat.blendSrc = src;
 		mat.blendDst = dst;
-		mat.blendSrcAlpha = OneFactor;
-		mat.blendDstAlpha = OneMinusSrcAlphaFactor;
+		// Adding or modulating light leaves coverage alone: written to a transparent canvas, the source
+		// alpha would make the texture's black backdrop opaque.
+		mat.blendSrcAlpha = keepAlpha ? ZeroFactor : OneFactor;
+		mat.blendDstAlpha = keepAlpha ? OneFactor : OneMinusSrcAlphaFactor;
 	};
 	mat.transparent = mode >= M2BlendMode.Alpha;
 	switch (mode) {
@@ -341,13 +343,13 @@ export function applyM2BlendMode(mat: Material, mode: number): void {
 		case M2BlendMode.Alpha:
 			return set(SrcAlphaFactor, OneMinusSrcAlphaFactor);
 		case M2BlendMode.NoAlphaAdd:
-			return set(OneFactor, OneFactor);
+			return set(OneFactor, OneFactor, true);
 		case M2BlendMode.Add:
-			return set(SrcAlphaFactor, OneFactor);
+			return set(SrcAlphaFactor, OneFactor, true);
 		case M2BlendMode.Mod:
-			return set(DstColorFactor, ZeroFactor);
+			return set(DstColorFactor, ZeroFactor, true);
 		case M2BlendMode.Mod2x:
-			return set(DstColorFactor, SrcColorFactor);
+			return set(DstColorFactor, SrcColorFactor, true);
 		default:
 			return set(OneFactor, OneMinusSrcAlphaFactor);
 	}

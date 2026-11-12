@@ -1,5 +1,15 @@
-import { createEffect, createResource, createSignal, For, on, Show, type JSX } from "solid-js";
-import { createStore } from "solid-js/store";
+import {
+	createDeferred,
+	createEffect,
+	createMemo,
+	createSignal,
+	createStore,
+	For,
+	reconcile,
+	Show,
+	untrack,
+} from "solid-js";
+import type { JSX } from "@solidjs/web";
 import {
 	AssetManager,
 	BACKDROP_CHARACTER_ATTACHMENT,
@@ -11,6 +21,8 @@ import {
 	petPosition,
 	type CharacterAppearance,
 	type CharacterItem,
+	type ChrRace,
+	type CustomizationOptions,
 	type ItemAppearance,
 	type M2Instance,
 } from "@roboto_/wotlk-viewer-core";
@@ -47,6 +59,29 @@ const MODELS = [
 
 type Mode = "character" | "model" | "creature" | "item";
 
+/**
+ * Shallow-merges `patch` into a store draft. Objects and arrays are reconciled into the ones already there,
+ * so an unchanged guild emblem or equipment list (keyed by slot) does not re-run its readers.
+ */
+function mergeInto<T extends object>(draft: T, patch: Partial<T>): void {
+	const target = draft as Record<string, unknown>;
+	for (const [key, value] of Object.entries(patch)) {
+		if (value && typeof value === "object" && target[key] && typeof target[key] === "object")
+			reconcile(value, "slot")(target[key]);
+		else target[key] = value;
+	}
+}
+
+/**
+ * Empty on any failure: a rejected search has no `<Errored>` to land in and would halt the app.
+ * Without a database the API is absent and the dev server answers with its HTML page.
+ */
+async function searchCharacters(name: string): Promise<CharacterSummary[]> {
+	const res = await fetch(`/api/characters?name=${encodeURIComponent(name)}&limit=30`);
+	if (!res.ok || !res.headers.get("Content-Type")?.includes("json")) return [];
+	return (await res.json()) as CharacterSummary[];
+}
+
 export function App(): JSX.Element {
 	const [mode, setMode] = createSignal<Mode>("character");
 	const [displayId, setDisplayId] = createSignal(188); // blue murloc
@@ -66,6 +101,8 @@ export function App(): JSX.Element {
 	});
 	const [modelPath, setModelPath] = createSignal(MODELS[0]);
 	const [item, setItem] = createStore<ItemAppearance>({ itemEntry: 49623 }); // Shadowmourne
+	const patchAppearance = (patch: Partial<CharacterAppearance>) => setAppearance((s) => mergeInto(s, patch));
+	const patchItem = (patch: Partial<ItemAppearance>) => setItem((s) => mergeInto(s, patch));
 	const [animation, setAnimation] = createSignal(0);
 	const [animIds, setAnimIds] = createSignal<number[]>([]);
 	const [status, setStatus] = createSignal("");
@@ -77,24 +114,24 @@ export function App(): JSX.Element {
 	const [showPet, setShowPet] = createSignal(true);
 	const [showBackground, setShowBackground] = createSignal(true);
 
-	const [races] = createResource(() => gameData.races());
-	const [animNames] = createResource(() => gameData.animationNames());
+	// Undefined until the first answer lands, so the first render does not wait on the DBCs.
+	const races = createMemo<Map<number, ChrRace> | undefined>(() => gameData.races(), { loadingValue: undefined });
+	const animNames = createMemo<Map<number, string> | undefined>(() => gameData.animationNames(), {
+		loadingValue: undefined,
+	});
+	const options = createMemo<CustomizationOptions | undefined>(
+		() => gameData.customizationOptions(appearance.race, appearance.gender),
+		{ loadingValue: undefined },
+	);
+	// Deferred so a new search keeps the previous results on screen instead of holding the update.
+	const results = createDeferred<CharacterSummary[]>(() => {
+		const name = search();
+		return name.length < 2 ? [] : searchCharacters(name);
+	});
 
 	// A model may not have the animation the previous one was playing.
-	createEffect(
-		on(animIds, (ids) => {
-			if (ids.length > 0 && !ids.includes(animation())) setAnimation(ids[0]);
-		}),
-	);
-	const [options] = createResource(
-		() => [appearance.race, appearance.gender] as const,
-		([race, gender]) => gameData.customizationOptions(race, gender),
-	);
-	const [results] = createResource(search, async (name) => {
-		if (name.length < 2) return [] as CharacterSummary[];
-		return (await (
-			await fetch(`/api/characters?name=${encodeURIComponent(name)}&limit=30`)
-		).json()) as CharacterSummary[];
+	createEffect(animIds, (ids) => {
+		if (ids.length > 0 && !ids.includes(untrack(animation))) setAnimation(ids[0]);
 	});
 
 	const loadCharacter = async (guid: number) => {
@@ -123,9 +160,8 @@ export function App(): JSX.Element {
 				enchant: e.enchant,
 			}));
 
-	/** One store write per change, so the character is rebuilt once. */
 	const applyCharacter = (c: CharacterDetails, transmog: boolean) =>
-		setAppearance({
+		patchAppearance({
 			race: c.race,
 			gender: c.gender,
 			classId: c.class,
@@ -147,7 +183,7 @@ export function App(): JSX.Element {
 		setShowTransmog(on);
 		const c = dbCharacter();
 		// Only the equipment changes, so the toggles the user has set since loading stay put.
-		if (c) setAppearance("items", characterItems(c, on));
+		if (c) patchAppearance({ items: characterItems(c, on) });
 	};
 
 	const itemEntry = (slot: EquipmentSlot) => appearance.items?.find((i) => i.slot === slot)?.itemEntry ?? "";
@@ -155,7 +191,7 @@ export function App(): JSX.Element {
 		const entry = Number(value);
 		const items: CharacterItem[] = (appearance.items ?? []).filter((i) => i.slot !== slot);
 		if (entry > 0) items.push({ slot, itemEntry: entry });
-		setAppearance("items", items);
+		patchAppearance({ items });
 	};
 
 	const onLoad = (inst: M2Instance) => {
@@ -216,7 +252,10 @@ export function App(): JSX.Element {
 							type="number"
 							value={item.itemEntry ?? ""}
 							onChange={(e) =>
-								setItem({ itemEntry: Number(e.currentTarget.value) || undefined, displayId: undefined })
+								patchItem({
+									itemEntry: Number(e.currentTarget.value) || undefined,
+									displayId: undefined,
+								})
 							}
 						/>
 					</div>
@@ -226,7 +265,10 @@ export function App(): JSX.Element {
 							type="number"
 							value={item.displayId ?? ""}
 							onChange={(e) =>
-								setItem({ displayId: Number(e.currentTarget.value) || undefined, itemEntry: undefined })
+								patchItem({
+									displayId: Number(e.currentTarget.value) || undefined,
+									itemEntry: undefined,
+								})
 							}
 						/>
 					</div>
@@ -235,7 +277,7 @@ export function App(): JSX.Element {
 						<input
 							type="number"
 							value={item.enchant ?? ""}
-							onChange={(e) => setItem("enchant", Number(e.currentTarget.value) || undefined)}
+							onChange={(e) => patchItem({ enchant: Number(e.currentTarget.value) || undefined })}
 						/>
 					</div>
 					<div class="row toggles">
@@ -243,7 +285,7 @@ export function App(): JSX.Element {
 							<input
 								type="checkbox"
 								checked={item.showEnchants !== false}
-								onChange={(e) => setItem("showEnchants", e.currentTarget.checked)}
+								onChange={(e) => patchItem({ showEnchants: e.currentTarget.checked })}
 							/>{" "}
 							Enchants
 						</label>
@@ -252,7 +294,7 @@ export function App(): JSX.Element {
 							<input
 								type="checkbox"
 								checked={!!item.right}
-								onChange={(e) => setItem("right", e.currentTarget.checked)}
+								onChange={(e) => patchItem({ right: e.currentTarget.checked })}
 							/>{" "}
 							Right piece
 						</label>
@@ -264,7 +306,7 @@ export function App(): JSX.Element {
 							value={`${item.race ?? 1}|${item.gender ?? 0}`}
 							onChange={(e) => {
 								const [race, gender] = e.currentTarget.value.split("|").map(Number);
-								setItem({ race, gender });
+								patchItem({ race, gender });
 							}}
 						>
 							<For each={PLAYABLE_RACES}>
@@ -299,12 +341,12 @@ export function App(): JSX.Element {
 						value={search()}
 						onInput={(e) => setSearch(e.currentTarget.value)}
 					/>
-					<Show when={(results() ?? []).length > 0}>
+					<Show when={results().length > 0}>
 						<div class="list">
 							<For each={results()}>
 								{(c) => (
 									<div
-										classList={{ active: selectedGuid() === c.guid }}
+										class={{ active: selectedGuid() === c.guid }}
 										onClick={() => void loadCharacter(c.guid).catch(onError)}
 									>
 										<span>{c.name}</span>
@@ -323,7 +365,7 @@ export function App(): JSX.Element {
 						<select
 							value={appearance.race}
 							onChange={(e) =>
-								setAppearance({
+								patchAppearance({
 									race: Number(e.currentTarget.value),
 									skin: 0,
 									face: 0,
@@ -343,7 +385,7 @@ export function App(): JSX.Element {
 						<select
 							value={appearance.gender}
 							onChange={(e) =>
-								setAppearance({
+								patchAppearance({
 									gender: Number(e.currentTarget.value),
 									skin: 0,
 									face: 0,
@@ -357,23 +399,23 @@ export function App(): JSX.Element {
 							<option value={1}>Female</option>
 						</select>
 					</div>
-					{numberSelect("Skin", options()?.skins, appearance.skin ?? 0, (v) => setAppearance("skin", v))}
-					{numberSelect("Face", options()?.faces, appearance.face ?? 0, (v) => setAppearance("face", v))}
+					{numberSelect("Skin", options()?.skins, appearance.skin ?? 0, (v) => patchAppearance({ skin: v }))}
+					{numberSelect("Face", options()?.faces, appearance.face ?? 0, (v) => patchAppearance({ face: v }))}
 					{numberSelect("Hair style", options()?.hairStyles, appearance.hairStyle ?? 0, (v) =>
-						setAppearance("hairStyle", v),
+						patchAppearance({ hairStyle: v }),
 					)}
 					{numberSelect("Hair color", options()?.hairColors, appearance.hairColor ?? 0, (v) =>
-						setAppearance("hairColor", v),
+						patchAppearance({ hairColor: v }),
 					)}
 					{numberSelect("Facial", options()?.facialStyles, appearance.facialStyle ?? 0, (v) =>
-						setAppearance("facialStyle", v),
+						patchAppearance({ facialStyle: v }),
 					)}
 					<div class="row toggles">
 						<label>
 							<input
 								type="checkbox"
 								checked={appearance.showHelm}
-								onChange={(e) => setAppearance("showHelm", e.currentTarget.checked)}
+								onChange={(e) => patchAppearance({ showHelm: e.currentTarget.checked })}
 							/>{" "}
 							Helm
 						</label>
@@ -381,7 +423,7 @@ export function App(): JSX.Element {
 							<input
 								type="checkbox"
 								checked={appearance.showCloak}
-								onChange={(e) => setAppearance("showCloak", e.currentTarget.checked)}
+								onChange={(e) => patchAppearance({ showCloak: e.currentTarget.checked })}
 							/>{" "}
 							Cloak
 						</label>
@@ -389,7 +431,7 @@ export function App(): JSX.Element {
 							<input
 								type="checkbox"
 								checked={appearance.showTabard}
-								onChange={(e) => setAppearance("showTabard", e.currentTarget.checked)}
+								onChange={(e) => patchAppearance({ showTabard: e.currentTarget.checked })}
 							/>{" "}
 							Tabard
 						</label>
@@ -397,7 +439,7 @@ export function App(): JSX.Element {
 							<input
 								type="checkbox"
 								checked={appearance.sheathed}
-								onChange={(e) => setAppearance("sheathed", e.currentTarget.checked)}
+								onChange={(e) => patchAppearance({ sheathed: e.currentTarget.checked })}
 							/>{" "}
 							Sheathed
 						</label>
@@ -405,7 +447,7 @@ export function App(): JSX.Element {
 							<input
 								type="checkbox"
 								checked={appearance.drawRanged}
-								onChange={(e) => setAppearance("drawRanged", e.currentTarget.checked)}
+								onChange={(e) => patchAppearance({ drawRanged: e.currentTarget.checked })}
 							/>{" "}
 							Ranged
 						</label>
@@ -421,7 +463,7 @@ export function App(): JSX.Element {
 							<input
 								type="checkbox"
 								checked={appearance.showEnchants}
-								onChange={(e) => setAppearance("showEnchants", e.currentTarget.checked)}
+								onChange={(e) => patchAppearance({ showEnchants: e.currentTarget.checked })}
 							/>{" "}
 							Enchants
 						</label>

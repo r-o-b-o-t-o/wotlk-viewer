@@ -3,14 +3,13 @@ import {
 	createEffect,
 	createMemo,
 	createSignal,
-	on,
-	onCleanup,
-	onMount,
-	splitProps,
+	onSettled,
+	Show,
+	untrack,
 	useContext,
-	type JSX,
 	type ParentProps,
 } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import {
 	BackdropBuilder,
 	CharacterBuilder,
@@ -30,7 +29,7 @@ import {
 	type ViewerOptions,
 } from "@roboto_/wotlk-viewer-core";
 
-const ViewerContext = createContext<() => Viewer | null>();
+const ViewerContext = createContext<Viewer>();
 
 export interface WowViewerProps extends ParentProps {
 	/** Clear color, null for transparent. */
@@ -44,37 +43,37 @@ export interface WowViewerProps extends ParentProps {
 
 /** Hosts a canvas with a running `Viewer`; children get it through `useViewer()`. */
 export function WowViewer(props: WowViewerProps): JSX.Element {
-	const [local, rest] = splitProps(props, ["background", "antialias", "ref", "children"]);
 	const [viewer, setViewer] = createSignal<Viewer | null>(null);
 	let canvas!: HTMLCanvasElement;
 
-	onMount(() => {
-		const opts: ViewerOptions = { canvas, antialias: local.antialias };
-		if (local.background !== undefined) opts.background = local.background;
+	onSettled(() => {
+		// onSettled runs untracked, so these options are read once and never rebuild the viewer.
+		const opts: ViewerOptions = { canvas, antialias: props.antialias };
+		if (props.background !== undefined) opts.background = props.background;
 		const v = new Viewer(opts);
 		v.start();
 		setViewer(v);
-		local.ref?.(v);
-		onCleanup(() => v.dispose());
+		props.ref?.(v);
+		return () => v.dispose();
 	});
 
 	// The canvas is part of the template so Solid's child reconciliation never removes it.
 	return (
 		<div
-			class={rest.class}
-			style={rest.style ?? { width: "100%", height: "100%", overflow: "hidden", position: "relative" }}
+			class={props.class}
+			style={props.style ?? { width: "100%", height: "100%", overflow: "hidden", position: "relative" }}
 		>
 			<canvas ref={canvas} style={{ display: "block", width: "100%", height: "100%" }} />
-			<ViewerContext.Provider value={viewer}>{viewer() ? local.children : null}</ViewerContext.Provider>
+			<Show when={viewer()} keyed>
+				{(v) => <ViewerContext value={v}>{props.children}</ViewerContext>}
+			</Show>
 		</div>
 	);
 }
 
-/** The enclosing `WowViewer`'s viewer. */
+/** The enclosing `WowViewer`'s viewer; throws outside one. */
 export function useViewer(): Viewer {
-	const v = useContext(ViewerContext)?.();
-	if (!v) throw new Error("useViewer must be used inside <WowViewer>");
-	return v;
+	return useContext(ViewerContext);
 }
 
 interface InstanceProps {
@@ -97,9 +96,12 @@ interface InstanceProps {
 function useInstance(load: () => Promise<M2Instance>, key: () => unknown, props: InstanceProps): void {
 	const viewer = useViewer();
 	const [instance, setInstance] = createSignal<M2Instance | null>(null);
+	// A memo so an equal key (same appearance, new object) does not reload.
+	const loadKey = createMemo(key);
 
-	createEffect(
-		on(key, () => {
+	createEffect(loadKey, () =>
+		// Load options are read once per load; `position` alone follows changes, through the effect below.
+		untrack(() => {
 			const unmount = mountInstance(viewer, load, {
 				position: props.position,
 				autoFrame: props.autoFrame,
@@ -111,25 +113,26 @@ function useInstance(load: () => Promise<M2Instance>, key: () => unknown, props:
 				},
 				onError: (e) => props.onError?.(e),
 			});
-			onCleanup(() => {
+			return () => {
 				unmount();
 				setInstance(null);
-			});
+			};
 		}),
 	);
 
-	createEffect(() => {
-		const inst = instance();
-		const anim = props.animation ?? 0;
-		const loop = props.loop ?? true;
-		if (inst) void inst.playAnimation(anim, { loop });
-	});
+	createEffect(
+		() => ({ inst: instance(), anim: props.animation ?? 0, loop: props.loop ?? true }),
+		({ inst, anim, loop }) => {
+			if (inst) void inst.playAnimation(anim, { loop });
+		},
+	);
 
-	createEffect(() => {
-		const pos = props.position;
-		const inst = instance();
-		if (inst && pos) positionInstance(inst, pos);
-	});
+	createEffect(
+		() => [instance(), props.position] as const,
+		([inst, pos]) => {
+			if (inst && pos) positionInstance(inst, pos);
+		},
+	);
 }
 
 export interface ModelProps extends InstanceProps {
@@ -191,20 +194,18 @@ export function Backdrop(props: BackdropProps): JSX.Element {
 	const viewer = useViewer();
 	const data = createMemo(() => props.gameData ?? new GameData(props.assets));
 	createEffect(
-		on(
-			() => [props.race, props.classId, props.staticCamera] as const,
-			([race, classId, staticCamera]) =>
-				onCleanup(
-					mountBackdrop(
-						viewer,
-						() => new BackdropBuilder(props.assets, data(), viewer.backdropLighting).build(race, classId),
-						{
-							staticCamera,
-							onError: (e) => props.onError?.(e),
-						},
-					),
+		() => [props.race, props.classId, props.staticCamera] as const,
+		([race, classId, staticCamera]) =>
+			untrack(() =>
+				mountBackdrop(
+					viewer,
+					() => new BackdropBuilder(props.assets, data(), viewer.backdropLighting).build(race, classId),
+					{
+						staticCamera,
+						onError: (e) => props.onError?.(e),
+					},
 				),
-		),
+			),
 	);
 	return null;
 }

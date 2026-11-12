@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv, type Plugin } from "vite";
-import solid from "vite-plugin-solid";
+import solid from "@solidjs/vite-plugin";
 // Relative imports so Vite bundles the TypeScript sources into the config.
 import { createMiddleware } from "../../packages/server/src/index.js";
 import { dbOptionsFromUrl } from "../../packages/server/src/env.js";

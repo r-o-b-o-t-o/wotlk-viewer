@@ -1,4 +1,6 @@
-# wotlk-3d-viewer
+# wotlk-viewer
+
+[![CI](https://github.com/r-o-b-o-t-o/wotlk-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/r-o-b-o-t-o/wotlk-viewer/actions/workflows/ci.yml)
 
 WebGL renderer for World of Warcraft: Wrath of the Lich King (3.3.5a) models, written in TypeScript on top of
 [three.js](https://threejs.org). It reads M2 models, `.skin`/`.anim` files, BLP textures and DBC tables straight
@@ -10,8 +12,8 @@ from an extracted game client and assembles fully equipped player characters.
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@roboto_/wotlk-viewer-core`   | Parsers (M2, SKIN, ANIM, BLP, DBC), three.js renderer (`M2Model`, `M2Instance`, `M2Material`, `Viewer`), `CharacterBuilder`, `CreatureBuilder`, `ItemBuilder`, `BackdropBuilder`, typed DBC access (`GameData`). UI-framework agnostic.           |
 | `@roboto_/wotlk-viewer-server` | Node middleware / standalone server that serves the extracted client with case-insensitive paths and exposes AzerothCore characters over a small JSON API. Also `FsDataSource` (at `@roboto_/wotlk-viewer-server/fs`) for Node scripts and tests. |
-| `@roboto_/wotlk-viewer-solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`, `<Item>`, `<Backdrop>`.                                                                                                                                                |
-| `@roboto_/wotlk-viewer-react`  | The same components for React.                                                                                                                                                                                                                    |
+| `@roboto_/wotlk-viewer-solid`  | SolidJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`, `<Item>`, `<Backdrop>`. |
+| `@roboto_/wotlk-viewer-react`  | ReactJS components: `<WowViewer>`, `<Model>`, `<Character>`, `<Creature>`, `<Item>`, `<Backdrop>`. |
 | `apps/demo`                    | SolidJS demo: browse database characters and their pets, stand them in their race's character-creation scene, tweak appearance and equipment, play animations.                                                                                    |
 
 ## Getting started
@@ -35,9 +37,6 @@ addresses them from inside `Data`: the base archives' contents at the root, the 
 output directory has to be somewhere other than the client install itself.
 
 It walks the archives in the client's own search order, so a file replaced by a late patch wins over the original.
-That ordering is the point: tools that unpack archive by archive in directory order leave pre-patch copies in place,
-and the result looks like a rendering bug rather than stale data — Hailstorm's blade, for one, loses the particle
-emitter `patch.MPQ` adds to it.
 
 ```
 --client <dir>   Client install holding Data/ (default: the parent of WOW_CLIENT_DIR)
@@ -50,10 +49,6 @@ emitter `patch.MPQ` adds to it.
 
 Already have an extract from another tool? It works as long as the layout matches and the precedence is right; the
 `<locale>/` folder is what holds `DBFilesClient`.
-
-Other scripts: `npm test` (Vitest, parser and DBC tests run against the real client and are skipped when it is absent),
-`npm run typecheck`, `npm run build`, `npm run format` (Prettier, config in `.prettierrc`). Commit messages follow
-[Conventional Commits](https://www.conventionalcommits.org/).
 
 ## Using the core library
 
@@ -135,11 +130,11 @@ import { Character, WowViewer } from '@roboto_/wotlk-viewer-solid';
 ```
 
 `<Model assets path="Creature\Murloc\Murloc.m2" />` shows a raw model, `<Creature assets displayId={188} />` a creature
-by display id, and `<Item assets item={{ itemEntry: 49623 }} />` one item on its own — a weapon, shield, helm,
-shoulder, quiver or ammo model, with its enchant's effect on it. All of them take a `position`, either `[x, y, z]` in
-the viewer's Z-up space or a function of the loaded instance; `petPosition` is one such function, standing a pet off its owner's left shoulder and a step back. Passing
-the character's pet to `<Creature pet>` also sizes it the way the client does, and `pivot` frames and orbits the
-camera on the character rather than on the pair:
+by display id, and `<Item assets item={{ itemEntry: 49623 }} />` one item on its own — a weapon, shield, helm...
+All of them take a `position`, either `[x, y, z]` in the viewer's Z-up space or a function of the loaded instance;
+`petPosition` is one such function, standing a pet off its owner's left shoulder and a step back.
+Passing the character's pet to `<Creature pet>` also sizes it the way the client does,
+and `pivot` frames and orbits the camera on the character rather than on the pair:
 
 ```tsx
 <Character assets={assets} appearance={appearance()} pivot />
@@ -203,29 +198,6 @@ Endpoints:
   is 0 and pets keep their display scale, which leaves tamed ones at full NPC size.
 
 Any other backend works as long as it implements `DataSource` (`readFile`, optional `exists`).
-
-## How a character is built
-
-1. `ChrRaces` → `CreatureDisplayInfo` → `CreatureModelData` gives the body model.
-2. Geosets: hair from `CharHairGeosets`, facial features from `CharacterFacialHairStyles`, clothing groups from each
-   item's `ItemDisplayInfo.GeosetGroup`, helmets hide groups through `HelmetGeosetVisData`.
-3. Body texture: skin, face, facial hair, scalp and underwear layers from `CharSections`, then the region textures of
-   every equipped item (`Item\TextureComponents\...`, gender-specific with `_U` fallback) composited on a 2D canvas. The
-   guild tabard (the one item flagged in `ItemDisplayInfo`) instead takes background, border and emblem layers from
-   `Textures\GuildEmblems` when `guildEmblem` is given.
-4. Hair texture (texture type 6), cape (type 2) and monster textures are bound to the M2's replaceable slots. A bald
-   hair style carries no texture of its own, so the colour's sheet is taken from another style: facial hair samples
-   the same slot, and orc and gnome male beards come out untextured otherwise.
-5. Helm (`_<RacePrefix><M|F>` variant), shoulders, weapons and shields are loaded as separate `M2Instance`s and
-   attached to the body's attachment points; they animate on their own.
-6. A hand that carries something has its finger bones posed from the `HandsClosed` animation while the body keeps
-   playing its own, so the grip closes around the weapon.
-
-Rendering uses one draw group per skin batch with a small custom shader (1–2 texture layers, WoW blend modes,
-vertex color / alpha / UV-transform tracks, ambient + up to three directional and four point lights and linear fog,
-in gamma space like the original client).
-Skinning goes through three.js' `SkinnedMesh` with bone matrices computed by `M2Animator` (translation, compressed
-quaternion and scale tracks, global sequences, external `.anim` files loaded on demand).
 
 ## Known limitations
 

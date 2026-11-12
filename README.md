@@ -230,3 +230,13 @@ quaternion and scale tracks, global sequences, external `.anim` files loaded on 
 ## Known limitations
 
 What is deliberately left out or approximated is listed in [docs/known-limitations.md](docs/known-limitations.md).
+
+## Show your support
+
+⭐️ Give the project a star if you like it!
+
+<a href="https://ko-fi.com/roboto" target="_blank"><img height="35" style="border:0px; height:46px;" src="https://cdn.ko-fi.com/cdn/kofi5.png?v=3" border="0" alt="Buy Me a Coffee at ko-fi.com" />
+
+## Contact
+
+<img src="https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white"/> Feel free to get in touch with me on Discord: `roboto_`

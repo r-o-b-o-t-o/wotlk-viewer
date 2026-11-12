@@ -18,12 +18,15 @@ function wotlkData(clientDir: string, dbUrl: string | undefined): Plugin {
 	};
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
 	const env = loadEnv(mode, ROOT, "WOW_");
-	if (!env.WOW_CLIENT_DIR) throw new Error("WOW_CLIENT_DIR is not set; copy .env.example to .env");
+	// Only the dev server reads the client; a build must work without one (CI has none).
+	if (command === "serve" && !env.WOW_CLIENT_DIR) {
+		throw new Error("WOW_CLIENT_DIR is not set; copy .env.example to .env");
+	}
 	return {
 		envDir: ROOT,
-		plugins: [solid(), wotlkData(env.WOW_CLIENT_DIR, env.WOW_DB_URL || undefined)],
+		plugins: [solid(), wotlkData(env.WOW_CLIENT_DIR ?? "", env.WOW_DB_URL || undefined)],
 		server: { port: 5173 },
 	};
 });

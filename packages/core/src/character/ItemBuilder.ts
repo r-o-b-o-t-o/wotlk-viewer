@@ -67,7 +67,7 @@ export class ItemBuilder {
 		const itemVisual = HELD_FOLDERS.includes(folder)
 			? await this.data.heldItemVisual(enchant, display)
 			: (enchant && (await this.data.spellItemEnchantments()).get(enchant)?.itemVisualId) || 0;
-		return loadItemModel(this.assets, this.data, this.lighting, {
+		const instance = await loadItemModel(this.assets, this.data, this.lighting, {
 			folder,
 			model: folder === "Head" ? await this.helmVariant(model, item) : model,
 			texture,
@@ -77,6 +77,9 @@ export class ItemBuilder {
 			// id carries no inventory type, so a bow shown that way goes without one.
 			bowString: inventoryType === InventoryType.Ranged,
 		});
+		// A weapon model lies along +X, straight at the default camera: stand it on its hilt, flat side forward.
+		if (folder === "Weapon") instance.rotation.set(0, -Math.PI / 2, Math.PI / 2, "ZYX");
+		return instance;
 	}
 
 	private async resolve(item: ItemAppearance): Promise<{ display: ItemDisplayInfo; inventoryType?: InventoryType }> {

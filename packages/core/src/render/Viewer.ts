@@ -592,5 +592,7 @@ export class Viewer {
 		this.clear();
 		this.controls.dispose();
 		this.renderer.dispose();
+		// dispose() leaves the context to the garbage collector, and browsers cap live contexts (16 in Chrome).
+		this.renderer.forceContextLoss();
 	}
 }

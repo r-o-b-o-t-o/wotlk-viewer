@@ -5,7 +5,7 @@ import { dbOptionsFromUrl } from "./env.js";
 // Reads WOW_CLIENT_DIR, WOW_DB_URL and PORT; `npm start -w packages/server` loads them from .env.
 const clientDir = process.env.WOW_CLIENT_DIR;
 if (!clientDir) {
-	console.error("WOW_CLIENT_DIR is not set; copy .env.example to .env");
+	console.error("WOW_CLIENT_DIR is not set; point it at an extracted 3.3.5a client");
 	process.exit(1);
 }
 

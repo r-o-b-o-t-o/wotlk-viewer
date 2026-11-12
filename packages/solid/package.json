@@ -1,6 +1,6 @@
 {
 	"name": "@roboto_/wotlk-viewer-solid",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "SolidJS component for @roboto_/wotlk-viewer-core",
 	"keywords": [
 		"world-of-warcraft",

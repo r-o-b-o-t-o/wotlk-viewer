@@ -1,6 +1,6 @@
 {
 	"name": "@roboto_/wotlk-viewer-server",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"description": "Dev server serving extracted WoW client files and AzerothCore character data",
 	"type": "module",
 	"exports": {

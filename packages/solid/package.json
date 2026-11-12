@@ -1,6 +1,6 @@
 {
 	"name": "@roboto_/wotlk-viewer-solid",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"description": "SolidJS component for @roboto_/wotlk-viewer-core",
 	"type": "module",
 	"exports": {

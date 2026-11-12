@@ -154,13 +154,11 @@ instead. Models take `backdropAttachment` to say where that scene stands them:
 `useViewer()` gives children the `Viewer`. For other frameworks, `mountInstance(viewer, load, opts)`
 from the core package holds the same lifecycle (load, cancel, add, frame, dispose) behind one disposer, and
 `mountBackdrop(viewer, load)` does the same for a backdrop.
-It targets Solid 2.0 (`solid-js` and `@solidjs/web`, currently release candidates). The package ships TSX
-source (like most Solid libraries); compile it with `@solidjs/vite-plugin` in the consuming app.
+It targets Solid 2.0 (`solid-js` and `@solidjs/web`, currently release candidates).
 
 ### React
 
-Same API as the SolidJS bindings, from `@roboto_/wotlk-viewer-react` (`WowViewer`, `Model`, `Character`, `Creature`, `Item`, `Backdrop`, `useViewer`). Needs a bundler with the
-automatic JSX runtime (Vite does this out of the box).
+Same API as the SolidJS bindings, from `@roboto_/wotlk-viewer-react` (`WowViewer`, `Model`, `Character`, `Creature`, `Item`, `Backdrop`, `useViewer`).
 
 ### Serving game data
 

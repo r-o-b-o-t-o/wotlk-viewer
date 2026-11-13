@@ -16,6 +16,8 @@ Things deliberately left out or approximated. Maintainers and agents: read this 
   client and leave them behind here. The particle mesh of such an emitter also sorts against other translucent
   objects from the scene origin rather than from the model, since its own transform becomes the identity; that only
   matters for the few emitters using the Alpha blend mode, additive ones being order-independent.
+- `Viewer.seek` replays the same steps every time, but particles spawn at random, so two seeks to one frame show the
+  same pose with particles in different places.
 - An emitter's pool is sized like the client's, `(life + lifeVariation) * (rate + rateVariation) * 1.15`, grown as
   those numbers rise and never shrunk, with emission stopping while it is full. Rounding that down to whole
   particles, as the client does, silences an emitter whose rate and life multiply to less than 1/1.15: it reaches 17

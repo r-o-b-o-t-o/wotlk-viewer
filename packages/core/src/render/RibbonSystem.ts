@@ -175,6 +175,14 @@ export class RibbonSystem {
 		});
 	}
 
+	/** Drops the trail, as on a fresh emitter. */
+	reset(): void {
+		this.read = 0;
+		this.write = 0;
+		this.fraction = 0;
+		this.started = false;
+	}
+
 	/**
 	 * Lays down `dt` seconds of trail and rebuilds the strip. `bone` is the emitter bone's
 	 * model-space matrix, which is also the space the edges are kept in.

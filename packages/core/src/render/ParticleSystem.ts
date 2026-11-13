@@ -332,6 +332,14 @@ export class ParticleSystem {
 		this.material.uniforms.uTex.value = texture;
 	}
 
+	/** Drops every live particle, as on a fresh emitter. */
+	reset(): void {
+		this.count = 0;
+		this.emitAccumulator = 0;
+		this.burstFired = false;
+		this.twinkleCounter = 0;
+	}
+
 	/**
 	 * Simulates `dt` seconds and rebuilds the quads. `bone` is the emitter bone's model-space matrix;
 	 * `frames` carries the instance's own frame and the scene's, one of which this emitter simulates in.

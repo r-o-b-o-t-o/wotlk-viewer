@@ -316,6 +316,14 @@ export class M2Instance extends Object3D {
 		this.remove(child);
 	}
 
+	/** Back to time zero with no particles or trails, attached children too; the next `update` poses it. */
+	rewind(): void {
+		this.animator.rewind();
+		for (const ps of this.particles) ps.reset();
+		for (const rs of this.ribbons) rs.reset();
+		for (const { instance } of this.attached) instance.rewind();
+	}
+
 	/** Advances animation and updates bones, materials and attached children. */
 	update(dtMs: number, camera?: Camera): void {
 		let basis: BillboardBasis | undefined;

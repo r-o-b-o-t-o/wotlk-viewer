@@ -87,6 +87,9 @@ viewer.frame();
 await character.playAnimation(AnimationId.EmoteDance);
 ```
 
+`viewer.seek(frame)` rewinds every model (particles and ribbons included) and plays `frame` steps at 60 per second,
+so a given frame always shows the same pose with its particles spawned; `viewer.timeScale = 0` then freezes it there.
+
 Plain models work the same way with `M2Instance.create(await assets.loadModel(path), assets, viewer.lighting)`;
 creatures with `new CreatureBuilder(assets, gameData, viewer.lighting).build(displayId)`.
 

@@ -1,6 +1,6 @@
 {
 	"name": "@roboto_/wotlk-viewer-react",
-	"version": "1.0.1",
+	"version": "1.1.0",
 	"description": "React component for @roboto_/wotlk-viewer-core",
 	"keywords": [
 		"world-of-warcraft",

@@ -84,6 +84,13 @@ export class M2Animator {
 		this.playing = true;
 	}
 
+	/** Back to the start of the current sequence, global sequences included. */
+	rewind(): void {
+		this.time = 0;
+		this.globalTime = 0;
+		this.playing = true;
+	}
+
 	/**
 	 * Keeps the flagged bones on another sequence while the main one plays; the game grips weapons by
 	 * posing the fingers from HandsClosed like this. `bones` holds one flag per bone, null to clear.

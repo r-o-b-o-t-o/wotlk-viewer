@@ -220,6 +220,9 @@ export class ParticleSystem {
 	private sizeScale = 1;
 	/** Hands each particle its own offset into TWINKLE_TABLE, the way the client's slots do. */
 	private twinkleCounter = 0;
+	/** Seeded per emitter and reseeded by `reset`, so a seek replays the same particles. */
+	private random: () => number;
+	private readonly seed: number;
 	/**
 	 * Twinkle both resizes a particle and drops it for a frame at a time, from one index into
 	 * TWINKLE_TABLE. The index only moves when one of the two can do anything, matching the client:
@@ -237,6 +240,8 @@ export class ParticleSystem {
 		texture: Texture,
 		lighting: M2Lighting,
 		readonly maxParticles = 512,
+		/** The emitter's place in its model, which seeds its scatter apart from its siblings'. */
+		emitterIndex = 0,
 	) {
 		// Head and tail are independent styles; an emitter asking for both draws two quads per particle.
 		// Neither bit set is treated as a head, which is what the client falls back to.
@@ -255,6 +260,8 @@ export class ParticleSystem {
 		this.inheritBoneScale = (emitter.flags & M2ParticleFlags.InheritBoneScale) !== 0;
 		this.sorted = (emitter.flags & M2ParticleFlags.SortParticles) !== 0;
 		this.sortDepth = new Float32Array(this.sorted ? maxParticles : 0);
+		this.seed = Math.imul(emitterIndex + 1, 0x9e3779b1);
+		this.random = seeded(this.seed);
 		this.twinkleBase = emitter.twinkleScale[0];
 		this.twinkleSpan = emitter.twinkleScale[1] - this.twinkleBase;
 		this.twinkleOnOff = emitter.twinklePercent;
@@ -330,6 +337,15 @@ export class ParticleSystem {
 
 	setTexture(texture: Texture): void {
 		this.material.uniforms.uTex.value = texture;
+	}
+
+	/** Drops every live particle and reseeds the scatter, as on a fresh emitter. */
+	reset(): void {
+		this.random = seeded(this.seed);
+		this.count = 0;
+		this.emitAccumulator = 0;
+		this.burstFired = false;
+		this.twinkleCounter = 0;
 	}
 
 	/**
@@ -473,7 +489,7 @@ export class ParticleSystem {
 			const armed = visible && tracked > 0;
 			if (armed && !this.burstFired) {
 				this.grow(lifespan, tracked);
-				const burst = Math.max(0, Math.floor(tracked + e.emissionRateVary * rand2()));
+				const burst = Math.max(0, Math.floor(tracked + e.emissionRateVary * this.rand2()));
 				for (let i = 0; i < burst && this.count < this.capacity; i++) this.spawn(animator, lifespan);
 			}
 			this.burstFired = armed;
@@ -489,7 +505,7 @@ export class ParticleSystem {
 			// first place: at a rate of zero it leaks 2.5 particles a second at the largest variation in
 			// the client, and none at all at the common ones.
 			this.grow(lifespan, tracked);
-			const rate = tracked + e.emissionRateVary * rand2();
+			const rate = tracked + e.emissionRateVary * this.rand2();
 			this.emitAccumulator = Math.max(this.emitAccumulator + rate * step, -1);
 			// The client rounds what it is owed rather than flooring it, so a particle lands as soon as
 			// half of one has been earned. Either reading emits the same count over time, since what
@@ -526,26 +542,31 @@ export class ParticleSystem {
 		if (want > this.capacity) this.capacity = Math.min(want, this.maxParticles);
 	}
 
+	/** Uniform in [-1, 1). */
+	private rand2(): number {
+		return this.random() * 2 - 1;
+	}
+
 	private spawn(animator: M2Animator, lifespan: number): void {
 		const e = this.emitter;
 		// Seconds to add, again, not a fraction: the client's own budget sums `life + lifeVariation`,
 		// which only means anything if both are times. 89 emitters can land on a life of zero or less,
 		// where the client clamps to a millisecond and the particle dies before it is ever drawn.
-		const life = lifespan + e.lifespanVary * rand2();
+		const life = lifespan + e.lifespanVary * this.rand2();
 		if (life <= 0) return;
 		const speed =
 			animator.sampleScalar(e.emissionSpeed, "float", 0) *
-			(1 + animator.sampleScalar(e.speedVariation, "float", 0) * rand2());
+			(1 + animator.sampleScalar(e.speedVariation, "float", 0) * this.rand2());
 		const length = animator.sampleScalar(e.emissionAreaLength, "float", 0);
 		const width = animator.sampleScalar(e.emissionAreaWidth, "float", 0);
-		const polar = animator.sampleScalar(e.verticalRange, "float", 0) * rand2();
-		const azimuth = animator.sampleScalar(e.horizontalRange, "float", 0) * rand2();
+		const polar = animator.sampleScalar(e.verticalRange, "float", 0) * this.rand2();
+		const azimuth = animator.sampleScalar(e.horizontalRange, "float", 0) * this.rand2();
 
 		if (e.emitterType === 2) {
 			// Sphere: spawn on a shell between the two radii and travel along that radius. The sign of
 			// the emission speed decides the way, so shield glows with a negative speed converge inwards.
 			tmpDir.set(Math.cos(polar) * Math.cos(azimuth), Math.cos(polar) * Math.sin(azimuth), Math.sin(polar));
-			const radius = length + (width - length) * Math.random();
+			const radius = length + (width - length) * this.random();
 			tmpPos.copy(tmpDir).multiplyScalar(radius);
 			// Despite the name this is no spawn shape: the position above stands, only the travel turns.
 			if (this.upDirection) tmpDir.set(0, 0, 1);
@@ -553,7 +574,7 @@ export class ParticleSystem {
 			// Plane: spawn in a rectangle, moving along +Z within the given cone. Laid out as the client
 			// lays it out, width across X and length across Y, which the frame's quarter turn then puts
 			// the other way round — so the length still spans the bone's X, as a weapon glow does a blade.
-			tmpPos.set(width * (Math.random() - 0.5), length * (Math.random() - 0.5), 0);
+			tmpPos.set(width * (this.random() - 0.5), length * (this.random() - 0.5), 0);
 			tmpDir.set(Math.sin(polar) * Math.cos(azimuth), Math.sin(polar) * Math.sin(azimuth), Math.cos(polar));
 		}
 		// The emitter's origin rides in `toSim` (and in the mesh's matrix for a local-frame emitter),
@@ -575,16 +596,16 @@ export class ParticleSystem {
 		// a fallback rather than an override — and no emitter in the client asks for both.
 		p[o + 8] =
 			e.flags & M2ParticleFlags.ChooseRandomTexture
-				? Math.floor(Math.random() * e.textureRows * e.textureCols)
+				? Math.floor(this.random() * e.textureRows * e.textureCols)
 				: 0;
-		p[o + 9] = 1 + e.scaleVary[0] * rand2();
+		p[o + 9] = 1 + e.scaleVary[0] * this.rand2();
 		// NegateSpinRandom sends half the particles the other way round. The client turns over the
 		// whole angle it has built, so the angle they were born at goes with the rate.
-		const flip = e.flags & M2ParticleFlags.NegateSpinRandom && Math.random() < 0.5 ? -1 : 1;
-		p[o + 10] = (e.baseSpin + e.baseSpinVary * rand2()) * flip;
+		const flip = e.flags & M2ParticleFlags.NegateSpinRandom && this.random() < 0.5 ? -1 : 1;
+		p[o + 10] = (e.baseSpin + e.baseSpinVary * this.rand2()) * flip;
 		// Crossed over, as the client crosses them loading the emitter: the rate is the field the
 		// format calls the variation, and the variation is the one it calls the spin.
-		p[o + 11] = (e.spinVary + e.spin * rand2()) * flip;
+		p[o + 11] = (e.spinVary + e.spin * this.rand2()) * flip;
 		// The client indexes the twinkle table by the particle's slot, which it keeps for life. Ours
 		// move as the array compacts, so each particle carries the offset it was born with instead.
 		p[o + 12] = this.twinkleCounter++ & 0x7f;
@@ -746,8 +767,16 @@ export class ParticleSystem {
 	}
 }
 
-function rand2(): number {
-	return Math.random() * 2 - 1;
+/** mulberry32: a small seeded generator, enough for particle scatter. */
+function seeded(seed: number): () => number {
+	let state = seed >>> 0;
+	return () => {
+		state = (state + 0x6d2b79f5) >>> 0;
+		let t = state;
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
 }
 
 /** Re-expresses the camera axes of `basis` in the space `frame` maps out of. */

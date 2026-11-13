@@ -530,6 +530,20 @@ export class Viewer {
 		if (this.backdrop) this.updateBackdropProjection();
 	}
 
+	/**
+	 * Rewinds every model and plays `frame` steps of `1000 / fps` ms, drawing each, so that the same
+	 * frame number always shows the same pose and lets particles spawn in. Runs whatever `timeScale`
+	 * is (0 freezes the result in place).
+	 */
+	seek(frame: number, fps = 60): void {
+		for (const inst of this.instances) inst.rewind();
+		this.backdrop?.rewind();
+		const timeScale = this.timeScale;
+		this.timeScale = 1;
+		for (let i = 0; i < frame; i++) this.render(1000 / fps);
+		this.timeScale = timeScale;
+	}
+
 	/** Renders one frame, advancing animations by `dtMs`. */
 	render(dtMs = 0): void {
 		const fixed = this.onBackdrop;

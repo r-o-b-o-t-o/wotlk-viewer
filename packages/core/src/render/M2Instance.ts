@@ -113,7 +113,9 @@ export class M2Instance extends Object3D {
 		this.mesh.frustumCulled = false;
 		this.add(this.mesh);
 
-		this.particles = m2.particleEmitters.map((e) => new ParticleSystem(e, assets.whiteTexture, lighting));
+		this.particles = m2.particleEmitters.map(
+			(e, i) => new ParticleSystem(e, assets.whiteTexture, lighting, undefined, i),
+		);
 		for (const ps of this.particles) this.add(ps.mesh);
 		this.ribbons = m2.ribbonEmitters.map((r) => new RibbonSystem(r, [assets.whiteTexture], m2.materials, lighting));
 		for (const rs of this.ribbons) this.add(...rs.meshes);
